@@ -1,0 +1,186 @@
+const translations = {
+  zh: {
+// ...
+// ... (omitting hundreds of lines for brevity but I will include the whole block in actual call)
+    // Popup Header
+    "hero_eyebrow": "笔记采集",
+    "hero_title": "发送至 NotebookLM",
+    "hero_subtitle": "当前标签页，精简内容，更少操作。",
+    
+    // Page Context Card
+    "card_label_current": "当前页面",
+    "btn_open": "打开",
+    "btn_authorize": "授权",
+    "status_loading": "正在加载当前标签页…",
+    "status_ready": "准备就绪。",
+    "page_title_loading": "加载中…",
+    "selection_label": "选中的文本",
+    "page_untitled": "未命名页面",
+    
+    // Target Notebook Card
+    "card_label_target": "目标笔记本",
+    "btn_refresh": "刷新",
+    "label_choose_notebook": "选择笔记本",
+    "btn_new_notebook": "新建笔记本",
+    "no_notebooks": "暂无可用笔记本",
+    
+    // ArXiv / YouTube Special Card
+    "card_label_existing": "添加至现有笔记本",
+    "btn_show": "显示",
+    "btn_hide": "隐藏",
+    "btn_add": "添加",
+    "mode_arxiv_import": "arXiv 快速导入",
+    "mode_youtube_import": "YouTube 快速导入",
+    
+    // Action Panel
+    "label_send_ready": "准备发送",
+    "label_create_new": "新建笔记本",
+    "hint_send_url": "将当前页面 URL 导入选中的 NotebookLM 笔记本。",
+    "hint_create_arxiv": "创建一个笔记本并关联论文 PDF。",
+    "hint_create_youtube": "创建一个笔记本并关联视频 URL。",
+    "btn_send_page": "发送页面",
+    "btn_create": "创建",
+    
+    // Status Messages
+    "status_fetching_notebooks": "正在获取笔记本…",
+    "status_fetch_failed": "无法获取笔记本。",
+    "status_no_notebooks_found": "尚未发现笔记本。",
+    "status_choose_and_send": "请选择笔记本并发送。",
+    "status_creating_notebook": "正在创建新笔记本…",
+    "status_create_failed": "创建笔记本失败。",
+    "status_new_notebook_selected": "新笔记本已创建并选中。",
+    "status_invalid_url": "此标签页未暴露有效的 URL。",
+    "status_importing_arxiv": "正在创建笔记本并导入 arXiv PDF…",
+    "status_importing_youtube": "正在创建笔记本并导入 YouTube 视频…",
+    "status_sending": "正在发送页面至 NotebookLM…",
+    "status_send_failed": "发送失败。",
+    "status_import_success_arxiv": "PDF 已导入新笔记本。正在打开 NotebookLM…",
+    "status_import_success_youtube": "视频已添加至新笔记本。正在打开 NotebookLM…",
+    "status_import_success": "已导入。正在打开笔记本…",
+    "status_choose_existing": "请先选择一个现有笔记本。",
+    "status_adding_arxiv": "正在将 arXiv PDF 添加至选中的笔记本…",
+    "status_adding_youtube": "正在将 YouTube 视频添加至选中的笔记本…",
+    "status_add_success_arxiv": "PDF 已添加。正在打开笔记本…",
+    "status_add_success_youtube": "视频已添加。正在打开笔记本…",
+    
+    // Page Descriptions
+    "desc_arxiv": "检测到 arXiv 论文。PDF 源码 {url} 将导入新建的 NotebookLM 笔记本。",
+    "desc_youtube": "检测到 YouTube 视频。视频 URL {url} 将导入 NotebookLM。",
+    "desc_default": "当前页面 URL 将导入 NotebookLM。",
+    
+    // Settings
+    "settings_title": "设置",
+    "language_label": "语言 (Language)",
+    "lang_zh": "简体中文",
+    "lang_en": "English",
+
+    // Inline Launcher (Content Script)
+    "btn_save": "保存",
+    "inline_hint": "以此 {type} 创建笔记本，或添加至现有笔记本。",
+    "btn_hide_existing": "隐藏现有内容",
+    "btn_add_to_existing": "添加至现有笔记本",
+    "type_pdf": "PDF",
+    "type_video": "视频",
+    "type_notebook": "笔记",
+    "status_imported_opening": "已导入。正在打开笔记本…",
+    "status_added_opening": "已添加。正在打开笔记本…"
+  },
+  en: {
+    // Popup Header
+    "hero_eyebrow": "Notebook Capture",
+    "hero_title": "Send to NotebookLM",
+    "hero_subtitle": "Current tab, cleaner context, fewer clicks.",
+    
+    // Page Context Card
+    "card_label_current": "Current page",
+    "btn_open": "Open",
+    "btn_authorize": "Authorize",
+    "status_loading": "Loading current tab…",
+    "status_ready": "Ready.",
+    "page_title_loading": "Loading…",
+    "selection_label": "Selected text",
+    "page_untitled": "Untitled page",
+    
+    // Target Notebook Card
+    "card_label_target": "Target notebook",
+    "btn_refresh": "Refresh",
+    "label_choose_notebook": "Choose notebook",
+    "btn_new_notebook": "New notebook",
+    "no_notebooks": "No notebooks available",
+    
+    // ArXiv / YouTube Special Card
+    "card_label_existing": "Add to Existing",
+    "btn_show": "Show",
+    "btn_hide": "Hide",
+    "btn_add": "Add",
+    "mode_arxiv_import": "arXiv quick import",
+    "mode_youtube_import": "YouTube quick import",
+    
+    // Action Panel
+    "label_send_ready": "Ready to send",
+    "label_create_new": "Create New",
+    "hint_send_url": "Imports the current page URL into the selected NotebookLM notebook.",
+    "hint_create_arxiv": "Create a notebook and attach the paper PDF.",
+    "hint_create_youtube": "Create a notebook and attach the video URL.",
+    "btn_send_page": "Send page",
+    "btn_create": "Create",
+    
+    // Status Messages
+    "status_fetching_notebooks": "Fetching notebooks…",
+    "status_fetch_failed": "Could not fetch notebooks.",
+    "status_no_notebooks_found": "No notebooks found yet.",
+    "status_choose_and_send": "Choose a notebook and send.",
+    "status_creating_notebook": "Creating a new notebook…",
+    "status_create_failed": "Could not create notebook.",
+    "status_new_notebook_selected": "New notebook created and selected.",
+    "status_invalid_url": "This tab does not expose a valid URL.",
+    "status_importing_arxiv": "Creating notebook and importing arXiv PDF…",
+    "status_importing_youtube": "Creating notebook and importing YouTube video…",
+    "status_sending": "Sending page to NotebookLM…",
+    "status_send_failed": "Send failed.",
+    "status_import_success_arxiv": "PDF imported into a new notebook. Opening NotebookLM…",
+    "status_import_success_youtube": "Video added to a new notebook. Opening NotebookLM…",
+    "status_import_success": "Imported. Opening notebook…",
+    "status_choose_existing": "Choose an existing notebook first.",
+    "status_adding_arxiv": "Adding arXiv PDF to the selected notebook…",
+    "status_adding_youtube": "Adding YouTube video to the selected notebook…",
+    "status_add_success_arxiv": "PDF added. Opening notebook…",
+    "status_add_success_youtube": "Video added. Opening notebook…",
+    
+    // Page Descriptions
+    "desc_arxiv": "Detected arXiv paper. The PDF source {url} will be imported into a newly created NotebookLM notebook.",
+    "desc_youtube": "Detected YouTube video. The video URL {url} will be imported into NotebookLM.",
+    "desc_default": "The current page URL will be imported into NotebookLM.",
+    
+    // Settings
+    "settings_title": "Settings",
+    "language_label": "Language",
+    "lang_zh": "Simplified Chinese",
+    "lang_en": "English",
+
+    // Inline Launcher (Content Script)
+    "btn_save": "Save",
+    "inline_hint": "Create a notebook with this {type}, or add it to an existing one.",
+    "btn_hide_existing": "Hide Existing",
+    "btn_add_to_existing": "Add to Existing",
+    "type_pdf": "PDF",
+    "type_video": "video",
+    "type_notebook": "notebook",
+    "status_imported_opening": "Imported. Opening notebook…",
+    "status_added_opening": "Added. Opening notebook…"
+  }
+};
+
+function getTranslation(lang, key, params = {}) {
+  let text = translations[lang]?.[key] || translations["zh"][key] || key;
+  for (const [k, v] of Object.entries(params)) {
+    text = text.replace(`{${k}}`, v);
+  }
+  return text;
+}
+
+// Support for non-module environment (like traditional content scripts)
+// Attach to window so both regular and module scripts can access it
+if (typeof window !== "undefined") {
+  window.__STN_I18N__ = { translations, getTranslation };
+}
