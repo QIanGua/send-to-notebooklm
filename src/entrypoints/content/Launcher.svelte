@@ -1,10 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { locale, t, type Language } from '@/lib/i18n';
+  import { getPreferredSourceUrl, isQuickImportPage } from '@/lib/page-context';
   import { browser } from 'wxt/browser';
 
   export let page: any;
-  export let host: 'arxiv'|'youtube'|'default' = 'default';
+  export let host: string = 'default';
 
   let panelOpen = false;
   let existingOpen = false;
@@ -14,8 +15,14 @@
   let isBusy = false;
   let storageListener: ((changes: Record<string, { newValue?: unknown }>, areaName: string) => void) | null = null;
 
-  $: sourceUrl = page.arxiv?.pdfUrl || page.youtube?.videoUrl || page.canonicalUrl || page.url;
-  $: currentSourceLabel = page.arxiv?.pdfUrl ? $t("type_pdf") : $t("type_video");
+  $: sourceUrl = getPreferredSourceUrl(page);
+  $: currentSourceLabel = page?.site?.sourceKind === 'pdf'
+    ? $t('type_pdf')
+    : page?.site?.sourceKind === 'video'
+      ? $t('type_video')
+      : $t('type_notebook');
+  $: siteLabel = page?.site?.displayName || (host === 'arxiv' ? 'arXiv' : host === 'youtube' ? 'YouTube' : $t('type_notebook'));
+  $: showOpenNotebookButton = status.tone === 'error';
 
   onMount(() => {
     void (async () => {
@@ -74,7 +81,13 @@
   }
 
   async function createAndSend() {
-    setStatus($t("status_importing_arxiv"));
+    setStatus(
+      page?.site?.sourceKind === 'pdf'
+        ? $t('status_importing_arxiv')
+        : page?.site?.sourceKind === 'video'
+          ? $t('status_importing_youtube')
+          : $t('status_importing_source'),
+    );
     isBusy = true;
     try {
       const response: any = await browser.runtime.sendMessage({
@@ -96,7 +109,13 @@
       setStatus($t("status_choose_existing"), "error");
       return;
     }
-    setStatus(page.arxiv?.pdfUrl ? $t("status_adding_arxiv") : $t("status_adding_youtube"));
+    setStatus(
+      page?.site?.sourceKind === 'pdf'
+        ? $t('status_adding_arxiv')
+        : page?.site?.sourceKind === 'video'
+          ? $t('status_adding_youtube')
+          : $t('status_adding_source'),
+    );
     isBusy = true;
     try {
       const response: any = await browser.runtime.sendMessage({
@@ -126,7 +145,7 @@
         <img src={browser.runtime.getURL("/icon/48.png")} alt="" style="width: 100%; height: 100%; object-fit: contain; display: block;" />
       </div>
       <div>
-        <div style="font-size: 7px; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(194,101,45,0.5); font-weight: 800; line-height: 1;">{host === 'arxiv' ? 'arXiv' : host === 'youtube' ? 'YouTube' : $t('type_notebook')}</div>
+        <div style="font-size: 7px; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(194,101,45,0.5); font-weight: 800; line-height: 1;">{siteLabel}</div>
         <div style="font-size: 10px; font-weight: 700; line-height: 1.2; white-space: nowrap;">{$t('hero_title')}</div>
       </div>
     </div>
@@ -145,19 +164,22 @@
         {$t("inline_hint", { type: currentSourceLabel })}
       </p>
 
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;">
+      <div style="display: grid; grid-template-columns: {showOpenNotebookButton ? '1fr 1fr' : '1fr'}; gap: 8px; margin-bottom: 10px;">
         <button 
           on:click={createAndSend}
+          disabled={isBusy || !isQuickImportPage(page)}
           style="background: linear-gradient(135deg, #f97316, #ea580c); color: white; font-size: 12px; font-weight: 700; padding: 8px 0; border-radius: 12px; border: none; cursor: pointer; box-shadow: 0 4px 12px rgba(249,115,22,0.25);"
         >
           {$t("btn_create")}
         </button>
-        <button 
-          on:click={() => browser.runtime.sendMessage({ type: "open-notebooklm" })}
-          style="background: white; border: 1px solid #e7e5e4; color: #57534e; font-size: 12px; font-weight: 700; padding: 8px 0; border-radius: 12px; cursor: pointer;"
-        >
-          {$t("btn_authorize")}
-        </button>
+        {#if showOpenNotebookButton}
+          <button 
+            on:click={() => browser.runtime.sendMessage({ type: "open-notebooklm" })}
+            style="background: white; border: 1px solid #e7e5e4; color: #57534e; font-size: 12px; font-weight: 700; padding: 8px 0; border-radius: 12px; cursor: pointer;"
+          >
+            {$t("btn_open_notebooklm")}
+          </button>
+        {/if}
       </div>
 
       <button 
@@ -183,6 +205,7 @@
             </button>
             <button 
               on:click={addExisting}
+              disabled={isBusy || !selectedNotebookId}
               style="flex: 1; background: #1c160f; color: white; font-size: 12px; font-weight: 700; padding: 7px 0; border-radius: 12px; border: none; cursor: pointer;"
             >
               {$t("btn_add")}

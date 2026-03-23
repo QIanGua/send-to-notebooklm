@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { locale, t, type Language } from '@/lib/i18n';
+  import { getPreferredSourceUrl, isQuickImportPage } from '@/lib/page-context';
   import { browser } from 'wxt/browser';
 
   // --- State ---
@@ -15,12 +16,27 @@
 
   // --- Computed ---
   $: localizedStatus = status.text;
-  $: isArxivQuickMode = page?.arxiv?.pdfUrl && (page?.arxiv?.pageType === "abs" || page?.arxiv?.pageType === "pdf");
-  $: isYoutubeQuickMode = page?.youtube?.videoUrl && page?.youtube?.pageType === "video";
-  $: modeLabel = isArxivQuickMode ? $t('mode_arxiv_import') : isYoutubeQuickMode ? $t('mode_youtube_import') : "";
-  $: actionLabel = (isArxivQuickMode || isYoutubeQuickMode) ? $t('label_create_new') : $t('label_send_ready');
-  $: actionHint = isArxivQuickMode ? $t('hint_create_arxiv') : isYoutubeQuickMode ? $t('hint_create_youtube') : $t('hint_send_url');
-  $: btnLabel = (isArxivQuickMode || isYoutubeQuickMode) ? $t('btn_create') : $t('btn_send_page');
+  $: isQuickMode = isQuickImportPage(page);
+  $: isArxivQuickMode = page?.site?.id === 'arxiv' && isQuickMode;
+  $: isYoutubeQuickMode = page?.site?.id === 'youtube' && isQuickMode;
+  $: isCustomQuickMode = isQuickMode && !isArxivQuickMode && !isYoutubeQuickMode;
+  $: modeLabel = isArxivQuickMode
+    ? $t('mode_arxiv_import')
+    : isYoutubeQuickMode
+      ? $t('mode_youtube_import')
+      : isCustomQuickMode
+        ? $t('mode_site_import', { site: page?.site?.displayName || $t('type_notebook') })
+        : "";
+  $: actionLabel = isQuickMode ? $t('label_create_new') : $t('label_send_ready');
+  $: actionHint = isArxivQuickMode
+    ? $t('hint_create_arxiv')
+    : isYoutubeQuickMode
+      ? $t('hint_create_youtube')
+      : isCustomQuickMode
+        ? $t('hint_create_site', { site: page?.site?.displayName || $t('type_notebook') })
+        : $t('hint_send_url');
+  $: btnLabel = isQuickMode ? $t('btn_create') : $t('btn_send_page');
+  $: showOpenNotebookButton = status.tone === 'error';
 
   // --- Actions ---
   onMount(async () => {
@@ -30,7 +46,12 @@
     
     setStatus($t("status_loading"));
     try {
-      await Promise.all([loadPageContext(), loadNotebooks()]);
+      await loadPageContext();
+      if (!isQuickMode) {
+        await loadNotebooks();
+      } else {
+        setStatus($t("status_ready"));
+      }
       setStatus($t("status_ready"));
     } catch (e: any) {
       setStatus(e.message, "error");
@@ -89,11 +110,7 @@
   async function send() {
     if (sending) return;
 
-    const targetUrl = isArxivQuickMode 
-      ? page.arxiv.pdfUrl 
-      : isYoutubeQuickMode 
-        ? page.youtube.videoUrl 
-        : (page?.canonicalUrl || page?.url || "");
+    const targetUrl = getPreferredSourceUrl(page);
 
     if (!targetUrl) {
       setStatus($t("status_invalid_url"), "error");
@@ -102,10 +119,18 @@
 
     sending = true;
     isBusy = true;
-    setStatus(isArxivQuickMode ? $t("status_importing_arxiv") : isYoutubeQuickMode ? $t("status_importing_youtube") : $t("status_sending"));
+    setStatus(
+      isArxivQuickMode
+        ? $t("status_importing_arxiv")
+        : isYoutubeQuickMode
+          ? $t("status_importing_youtube")
+          : isQuickMode
+            ? $t("status_importing_source")
+            : $t("status_sending"),
+    );
 
     try {
-      const response: any = (isArxivQuickMode || isYoutubeQuickMode)
+      const response: any = isQuickMode
         ? await browser.runtime.sendMessage({ type: "create-notebook-and-send", urls: [targetUrl] })
         : await browser.runtime.sendMessage({ type: "send-to-notebook", notebookId: selectedNotebookId, urls: [targetUrl] });
 
@@ -124,7 +149,7 @@
 
   async function addToExisting() {
     if (sending) return;
-    const targetUrl = page?.arxiv?.pdfUrl || page?.youtube?.videoUrl || "";
+    const targetUrl = page?.site?.sourceUrl || "";
     if (!targetUrl || !selectedNotebookId) {
       setStatus($t("status_choose_existing"), "error");
       return;
@@ -132,7 +157,13 @@
 
     sending = true;
     isBusy = true;
-    setStatus(page?.arxiv?.pdfUrl ? $t("status_adding_arxiv") : $t("status_adding_youtube"));
+    setStatus(
+      page?.site?.sourceKind === 'pdf'
+        ? $t('status_adding_arxiv')
+        : page?.site?.sourceKind === 'video'
+          ? $t('status_adding_youtube')
+          : $t('status_adding_source'),
+    );
 
     try {
       const response: any = await browser.runtime.sendMessage({
@@ -142,7 +173,14 @@
       });
 
       if (!response.ok) throw new Error(response.error || $t("status_send_failed"));
-      setStatus($t("status_add_success_arxiv"), "success");
+      setStatus(
+        page?.site?.sourceKind === 'pdf'
+          ? $t('status_add_success_arxiv')
+          : page?.site?.sourceKind === 'video'
+            ? $t('status_add_success_youtube')
+            : $t('status_add_success_source'),
+        "success",
+      );
       await browser.tabs.create({ url: response.notebookUrl });
       window.close();
     } catch (error: any) {
@@ -150,6 +188,13 @@
     } finally {
       sending = false;
       isBusy = false;
+    }
+  }
+
+  async function toggleExistingPanel() {
+    showExistingNotebookPanel = !showExistingNotebookPanel;
+    if (showExistingNotebookPanel && !notebooks.length) {
+      await loadNotebooks();
     }
   }
 
@@ -195,37 +240,19 @@
         <h1 class="text-lg font-bold tracking-tight leading-none text-[#1c160f]">{$t('hero_title')}</h1>
       </div>
     </div>
-    <button 
-      on:click={() => showSettings = !showSettings}
-      aria-label={$t('settings_title')}
-      title={$t('settings_title')}
-      class="p-2 rounded-full hover:bg-orange-100/50 transition-colors text-orange-900/40"
-    >
-      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
-    </button>
+    <div class="flex items-center gap-1">
+      <button 
+        on:click={() => browser.tabs.create({ url: browser.runtime.getURL('options.html') })}
+        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-700 text-[11px] font-bold transition-all border border-orange-200/50"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+        {$t('settings_title')}
+      </button>
+    </div>
   </header>
 
-  <!-- Settings Panel -->
-  {#if showSettings}
-    <div class="bg-white/60 backdrop-blur-md border border-orange-100 rounded-2xl p-4 shadow-sm animate-in fade-in slide-in-from-top-2">
-      <h3 class="text-sm font-bold mb-3 flex items-center gap-2">
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg>
-        {$t('settings_title')}
-      </h3>
-      <div class="flex items-center justify-between">
-        <label for="lang-sel" class="text-xs text-orange-900/60 font-medium">{$t('language_label')}</label>
-        <select 
-          id="lang-sel"
-          on:change={changeLanguage}
-          value={$locale}
-          class="bg-white border border-orange-100 rounded-lg px-2 py-1 text-xs focus:ring-2 focus:ring-orange-200 outline-none"
-        >
-          <option value="zh">{$t('lang_zh')}</option>
-          <option value="en">{$t('lang_en')}</option>
-        </select>
-      </div>
-    </div>
-  {/if}
+  <!-- Removed small settings panel in favor of options page -->
+
 
   <!-- Page Info Card -->
   <div class="bg-white border border-stone-200/60 rounded-2xl p-4 shadow-sm relative group overflow-hidden">
@@ -257,11 +284,16 @@
     </div>
     
     <p class="text-[11px] text-stone-600 line-clamp-2 leading-relaxed h-[32px]">
-      {isArxivQuickMode 
-        ? $t('desc_arxiv', { url: shortenUrl(page.arxiv.pdfUrl) }) 
-        : isYoutubeQuickMode 
-          ? $t('desc_youtube', { url: shortenUrl(page.youtube.videoUrl) }) 
-          : page?.description || $t('desc_default')}
+      {isArxivQuickMode
+        ? $t('desc_arxiv', { url: shortenUrl(page.arxiv.pdfUrl) })
+        : isYoutubeQuickMode
+          ? $t('desc_youtube', { url: shortenUrl(page.youtube.videoUrl) })
+          : isCustomQuickMode
+            ? $t('desc_site_source', {
+                site: page?.site?.displayName || $t('type_notebook'),
+                url: shortenUrl(page?.site?.sourceUrl || ''),
+              })
+            : page?.description || $t('desc_default')}
     </p>
 
     {#if page?.selectedText}
@@ -274,7 +306,7 @@
   <!-- Selection / Action Section -->
   <div class="space-y-4">
     <!-- Target Selection -->
-    {#if !isArxivQuickMode && !isYoutubeQuickMode}
+    {#if !isQuickMode}
       <div class="bg-white border border-stone-200/60 rounded-2xl p-4 shadow-sm">
         <div class="flex items-center justify-between mb-3">
           <span class="text-[10px] font-bold text-stone-500 uppercase tracking-tight">{$t('card_label_target')}</span>
@@ -320,7 +352,7 @@
         <div class="flex items-center justify-between mb-2">
           <span class="text-[10px] font-bold text-stone-500 uppercase tracking-tight">{$t('card_label_existing')}</span>
           <button 
-            on:click={() => showExistingNotebookPanel = !showExistingNotebookPanel}
+            on:click={toggleExistingPanel}
             class="text-xs font-bold text-orange-600"
           >
             {showExistingNotebookPanel ? $t('btn_hide') : $t('btn_show')}
@@ -381,12 +413,14 @@
         <div class="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
       </button>
 
-      <button 
-        on:click={openNotebookLm}
-        class="text-[11px] font-bold text-orange-900/40 hover:text-orange-950 transition-colors py-1"
-      >
-        {$t('btn_authorize')}
-      </button>
+      {#if showOpenNotebookButton}
+        <button 
+          on:click={openNotebookLm}
+          class="text-[11px] font-bold text-orange-900/40 hover:text-orange-950 transition-colors py-1"
+        >
+          {$t('btn_open_notebooklm')}
+        </button>
+      {/if}
     </div>
   </div>
 

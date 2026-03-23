@@ -26,6 +26,10 @@ export default defineConfig({
         128: 'icon/128.png',
       },
     },
+    options_ui: {
+      page: 'entrypoints/options/index.html',
+      open_in_tab: true,
+    },
     web_accessible_resources: [
       {
         resources: ['icon/*'],

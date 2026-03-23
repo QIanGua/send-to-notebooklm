@@ -51,4 +51,11 @@ Production output is generated in `.output/chrome-mv3/`.
 
 - The extension depends on your active NotebookLM browser session
 - NotebookLM internal RPC identifiers may change over time
-- Inline launcher placement may need adjustment if arXiv or YouTube changes their DOM structure
+- Inline launcher placement may need adjustment if a supported website changes its DOM structure
+
+## Extending Website Support
+
+- Website-specific logic lives in `src/lib/site-adapters.ts`
+- Each adapter declares URL matching, source extraction, mount point discovery, and insertion strategy
+- The content script now injects only on supported websites, reducing overhead on unrelated pages
+- NotebookLM tokens and notebook lists are cached briefly in the background script to reduce repeated waits
