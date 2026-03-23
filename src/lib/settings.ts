@@ -42,16 +42,24 @@ export const DEFAULT_SETTINGS: Settings = {
   },
 };
 
-export async function getSettings(): Promise<Settings> {
-  const res = await browser.storage.local.get<{ settings?: Settings }>('settings');
-  if (!res.settings) return DEFAULT_SETTINGS;
-  
-  // Merge with defaults to handle versioning
-  return {
-    chat: { ...DEFAULT_SETTINGS.chat, ...res.settings.chat },
-    slideDeck: { ...DEFAULT_SETTINGS.slideDeck, ...res.settings.slideDeck },
-    infographic: { ...DEFAULT_SETTINGS.infographic, ...res.settings.infographic },
-  };
+export async function getSettings(): Promise<Settings | null> {
+  try {
+    // Check if browser/runtime is still valid
+    if (typeof browser === 'undefined' || !browser.runtime?.id) return null;
+    
+    const res = await browser.storage.local.get<{ settings?: Settings }>('settings');
+    if (!res.settings) return DEFAULT_SETTINGS;
+    
+    return {
+      chat: { ...DEFAULT_SETTINGS.chat, ...res.settings.chat },
+      slideDeck: { ...DEFAULT_SETTINGS.slideDeck, ...res.settings.slideDeck },
+      infographic: { ...DEFAULT_SETTINGS.infographic, ...res.settings.infographic },
+    };
+  } catch (e) {
+    if (String(e).includes('Extension context invalidated')) return null;
+    console.error('[STN] getSettings error:', e);
+    return DEFAULT_SETTINGS;
+  }
 }
 
 export async function saveSettings(settings: Settings): Promise<void> {

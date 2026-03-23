@@ -3,46 +3,49 @@ import { getSettings } from '@/lib/settings';
 export default defineContentScript({
   matches: ['https://notebooklm.google.com/*'],
   async main() {
-    console.log('[STN-NotebookLM] Enhancer Loaded');
-    
+    // 1. Immediate Context Check
+    if (typeof browser === 'undefined' || !browser.runtime?.id) return;
+
     let isContextValid = true;
 
-    // Global listener to catch "Extension context invalidated" before they reach the console as errors
-    window.addEventListener('unhandledrejection', (event) => {
-      if (event.reason?.message?.includes('Extension context invalidated')) {
-        handleInvalidatedContext();
-        event.preventDefault(); // Suppress the console error
+    // 2. Immediate Global Error Interception
+    const errorHandler = (event: PromiseRejectionEvent | ErrorEvent) => {
+      const msg = (event instanceof PromiseRejectionEvent) ? event.reason?.message : event.message;
+      if (msg?.includes('Extension context invalidated')) {
+        isContextValid = false;
+        if (event instanceof PromiseRejectionEvent) event.preventDefault();
+        updateIndicatorToInvalid();
       }
-    });
+    };
+    window.addEventListener('unhandledrejection', errorHandler);
+    window.addEventListener('error', errorHandler);
 
+    console.log('[STN-NotebookLM] Enhancer Loaded');
+    
     const indicator = document.createElement('div');
     indicator.id = 'stn-status';
     indicator.style.cssText = 'position: fixed; top: 10px; right: 10px; background: #1c160f; color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-family: sans-serif; z-index: 99999; border: 1px solid #e66d3d; opacity: 0.8; pointer-events: none; transition: all 0.5s;';
     indicator.textContent = 'STN: Active';
     document.body.appendChild(indicator);
 
-    function handleInvalidatedContext() {
-      if (!isContextValid) return;
-      isContextValid = false;
+    function updateIndicatorToInvalid() {
       indicator.textContent = 'STN: Refresh Page (F5)';
       indicator.style.background = '#8B2E2E';
       indicator.style.opacity = '1';
-      indicator.style.boxShadow = '0 0 10px #f00';
-      console.warn('[STN] Extension context invalidated. Please refresh the page.');
+      indicator.style.boxShadow = '0 0 15px #f00';
     }
 
-    const mainInterval = setInterval(async () => {
-      if (!isContextValid) return;
-
+    // 3. Main Loop wrapped in total safety
+    const intervalId = setInterval(async () => {
       try {
-        // Double check runtime ID
-        if (!browser.runtime?.id) {
-          handleInvalidatedContext();
+        if (!isContextValid || !browser.runtime?.id) {
+          clearInterval(intervalId);
+          updateIndicatorToInvalid();
           return;
         }
 
         const settings = await getSettings();
-        if (!settings) return; // Background might have failed
+        if (!settings) return; // Silent return if context invalidated inside getSettings
 
         const settingsStamp = JSON.stringify(settings);
         
@@ -53,14 +56,12 @@ export default defineContentScript({
 
         for (const dialog of dialogs) {
           const text = dialog.textContent || '';
-          const isChat = text.includes('Configure Chat') || (text.includes('conversational goal') && text.includes('response length'));
-          const isSlide = text.includes('Customize Slide Deck') || text.includes('format');
-          const isInfo = text.includes('Customize Infographic') || text.includes('orientation');
-
-          if (isChat || isSlide || isInfo) {
+          if (text.includes('Configure Chat') || text.includes('Customize Slide Deck') || text.includes('Customize Infographic')) {
             if (dialog.getAttribute('data-stn-settings-version') !== settingsStamp) {
-              console.group(`[STN] Syncing ${isInfo ? 'Infographic' : isChat ? 'Chat' : 'Slide'}`);
-              
+              const isChat = text.includes('Configure Chat');
+              const isSlide = text.includes('Customize Slide Deck');
+              const isInfo = text.includes('Customize Infographic');
+
               if (isChat) await applyChatSettings(dialog as HTMLElement, settings);
               else if (isSlide) await applySlideDeckSettings(dialog as HTMLElement, settings);
               else if (isInfo) await applyInfographicSettings(dialog as HTMLElement, settings);
@@ -68,23 +69,17 @@ export default defineContentScript({
               dialog.setAttribute('data-stn-settings-version', settingsStamp);
               
               if (isChat) {
-                setTimeout(async () => {
-                  try {
-                    await clickByTextForce(dialog as HTMLElement, 'Save');
-                  } catch (e) {
-                    // Ignore save errors if context died mid-sync
-                  }
-                }, 1000);
+                setTimeout(() => clickByTextForce(dialog as HTMLElement, 'Save'), 1000);
               }
-              console.groupEnd();
             }
           }
         }
       } catch (error: any) {
         if (error?.message?.includes('Extension context invalidated')) {
-          handleInvalidatedContext();
+          isContextValid = false;
+          updateIndicatorToInvalid();
         } else {
-          console.error('[STN] Loop error:', error);
+          console.error('[STN] Enhancer error:', error);
         }
       }
     }, 2000);
@@ -137,18 +132,15 @@ export default defineContentScript({
        const clean = (s: string) => s.toLowerCase().replace(/[\s\u00A0]+/g, ' ').trim();
        const sectionTarget = clean(sectionTitle);
        const buttonTarget = clean(btnText);
-
        const all = Array.from(dialog.querySelectorAll('*'));
        const header = all.find(el => {
           const t = clean(el.textContent || '');
           return t === sectionTarget || (t.includes(sectionTarget) && t.length < 55);
        }) as HTMLElement;
-
        const elements = Array.from(dialog.querySelectorAll('button, [role="button"], [role="radio"], .carousel-radio-button, label, .mdc-label, span'));
        let best: HTMLElement | null = null;
        let minDistance = Infinity;
        const hRect = header ? header.getBoundingClientRect() : { top: 0, left: 0 } as any;
-
        for (const el of elements) {
           const t = clean(el.textContent || '');
           if (t === buttonTarget || t.includes(buttonTarget)) {
@@ -160,12 +152,8 @@ export default defineContentScript({
              }
           }
        }
-
-       if (best) {
-          await simulateDeepClick(best);
-       } else {
-          await clickByTextForce(dialog, btnText);
-       }
+       if (best) await simulateDeepClick(best);
+       else await clickByTextForce(dialog, btnText);
     }
 
     async function applyLanguageSelection(dialog: HTMLElement, languageCode: string) {
@@ -187,7 +175,6 @@ export default defineContentScript({
           const t = el.textContent?.toLowerCase().trim() || '';
           return t === cleanText || (t.includes(cleanText) && t.length < cleanText.length + 8);
         });
-
       if (btns.length > 0) {
         await simulateDeepClick(btns[0] as HTMLElement);
         return true;
@@ -196,15 +183,19 @@ export default defineContentScript({
     }
 
     async function simulateDeepClick(el: HTMLElement) {
-      el.focus();
-      const events = ['mouseover', 'mousedown', 'mouseup', 'click'];
-      for (const name of events) {
-         el.dispatchEvent(new MouseEvent(name, { bubbles: true, view: window, buttons: 1 }));
+      try {
+        el.focus();
+        const events = ['mouseover', 'mousedown', 'mouseup', 'click'];
+        for (const name of events) {
+           el.dispatchEvent(new MouseEvent(name, { bubbles: true, view: window, buttons: 1 }));
+        }
+        el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, view: window }));
+        el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, view: window }));
+        el.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+        el.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', bubbles: true }));
+      } catch (e) {
+        // Ignore element errors
       }
-      el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, view: window }));
-      el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, view: window }));
-      el.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
-      el.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', bubbles: true }));
     }
   },
 });
