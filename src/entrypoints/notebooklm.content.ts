@@ -5,21 +5,45 @@ export default defineContentScript({
   async main() {
     console.log('[STN-NotebookLM] Enhancer Loaded');
     
+    let isContextValid = true;
+
+    // Global listener to catch "Extension context invalidated" before they reach the console as errors
+    window.addEventListener('unhandledrejection', (event) => {
+      if (event.reason?.message?.includes('Extension context invalidated')) {
+        handleInvalidatedContext();
+        event.preventDefault(); // Suppress the console error
+      }
+    });
+
     const indicator = document.createElement('div');
     indicator.id = 'stn-status';
-    indicator.style.cssText = 'position: fixed; top: 10px; right: 10px; background: #1c160f; color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-family: sans-serif; z-index: 99999; border: 1px solid #e66d3d; opacity: 0.8; pointer-events: none;';
+    indicator.style.cssText = 'position: fixed; top: 10px; right: 10px; background: #1c160f; color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-family: sans-serif; z-index: 99999; border: 1px solid #e66d3d; opacity: 0.8; pointer-events: none; transition: all 0.5s;';
     indicator.textContent = 'STN: Active';
     document.body.appendChild(indicator);
 
-    setInterval(async () => {
+    function handleInvalidatedContext() {
+      if (!isContextValid) return;
+      isContextValid = false;
+      indicator.textContent = 'STN: Refresh Page (F5)';
+      indicator.style.background = '#8B2E2E';
+      indicator.style.opacity = '1';
+      indicator.style.boxShadow = '0 0 10px #f00';
+      console.warn('[STN] Extension context invalidated. Please refresh the page.');
+    }
+
+    const mainInterval = setInterval(async () => {
+      if (!isContextValid) return;
+
       try {
+        // Double check runtime ID
         if (!browser.runtime?.id) {
-          indicator.textContent = 'STN: Refresh Page (F5)';
-          indicator.style.background = '#8B2E2E';
+          handleInvalidatedContext();
           return;
         }
 
         const settings = await getSettings();
+        if (!settings) return; // Background might have failed
+
         const settingsStamp = JSON.stringify(settings);
         
         const dialogs = Array.from(document.querySelectorAll('div, section, [role="dialog"]')).filter(el => {
@@ -34,9 +58,8 @@ export default defineContentScript({
           const isInfo = text.includes('Customize Infographic') || text.includes('orientation');
 
           if (isChat || isSlide || isInfo) {
-            // Check if we already applied THESE SPECIFIC settings to this dialog
             if (dialog.getAttribute('data-stn-settings-version') !== settingsStamp) {
-              console.group(`[STN] Applying ${isInfo ? 'Infographic' : isChat ? 'Chat' : 'Slide'} Settings`);
+              console.group(`[STN] Syncing ${isInfo ? 'Infographic' : isChat ? 'Chat' : 'Slide'}`);
               
               if (isChat) await applyChatSettings(dialog as HTMLElement, settings);
               else if (isSlide) await applySlideDeckSettings(dialog as HTMLElement, settings);
@@ -46,15 +69,23 @@ export default defineContentScript({
               
               if (isChat) {
                 setTimeout(async () => {
-                  await clickByTextForce(dialog as HTMLElement, 'Save');
+                  try {
+                    await clickByTextForce(dialog as HTMLElement, 'Save');
+                  } catch (e) {
+                    // Ignore save errors if context died mid-sync
+                  }
                 }, 1000);
               }
               console.groupEnd();
             }
           }
         }
-      } catch (error) {
-        console.error('[STN] Core loop error:', error);
+      } catch (error: any) {
+        if (error?.message?.includes('Extension context invalidated')) {
+          handleInvalidatedContext();
+        } else {
+          console.error('[STN] Loop error:', error);
+        }
       }
     }, 2000);
 
@@ -133,7 +164,6 @@ export default defineContentScript({
        if (best) {
           await simulateDeepClick(best);
        } else {
-          // Global fallback
           await clickByTextForce(dialog, btnText);
        }
     }
