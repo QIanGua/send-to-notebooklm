@@ -10,7 +10,7 @@ export default defineConfig({
     description: 'One-click capture for web pages, arXiv PDFs, and YouTube videos to NotebookLM.',
     version: '2.1.0',
     permissions: ['storage', 'contextMenus', 'tabs'],
-    host_permissions: ['https://notebooklm.google.com/*'],
+    host_permissions: ['https://notebooklm.google.com/*', 'http://*/*', 'https://*/*'],
     icons: {
       16: 'icon/16.png',
       32: 'icon/32.png',

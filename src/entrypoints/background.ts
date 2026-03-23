@@ -73,6 +73,12 @@ export default defineBackground(() => {
         const notebookId = await createNotebook();
         return { ok: true, notebookId };
       }
+      case 'fetch-page-links': {
+        if (!message.url || typeof message.url !== 'string') {
+          throw new Error('No source URL provided.');
+        }
+        return { ok: true, links: await fetchPageLinks(message.url) };
+      }
       case 'save-selected-notebook':
         await browser.storage.local.set({
           [STORAGE_KEYS.selectedNotebookId]: message.notebookId || '',
@@ -260,6 +266,29 @@ export default defineBackground(() => {
     return match[0];
   }
 
+  async function fetchPageLinks(sourceUrl: string) {
+    let parsedUrl: URL;
+
+    try {
+      parsedUrl = new URL(sourceUrl);
+    } catch {
+      throw new Error('Source URL is invalid.');
+    }
+
+    const response = await fetch(parsedUrl.href, {
+      method: 'GET',
+      credentials: 'omit',
+      redirect: 'follow',
+    });
+
+    if (!response.ok) {
+      throw new Error(`Could not fetch page links: ${response.status} ${response.statusText}`);
+    }
+
+    const html = await response.text();
+    return extractLinksFromHtml(parsedUrl, html);
+  }
+
   async function addSourcesToNotebook(notebookId: string, urls: string[]) {
     const { buildLabel, at } = await fetchNotebookTokens();
     const params = new URLSearchParams({
@@ -318,5 +347,31 @@ export default defineBackground(() => {
           .filter((url) => url.startsWith('https://') || url.startsWith('http://')),
       ),
     );
+  }
+
+  function extractLinksFromHtml(baseUrl: URL, html: string) {
+    const hrefPattern = /href\s*=\s*["']([^"'#]+)["']/gi;
+    const links: string[] = [];
+    const seen = new Set<string>();
+
+    for (const match of html.matchAll(hrefPattern)) {
+      const rawHref = String(match[1] || '').trim();
+      if (!rawHref || rawHref.startsWith('javascript:') || rawHref.startsWith('mailto:') || rawHref.startsWith('tel:')) {
+        continue;
+      }
+
+      try {
+        const resolved = new URL(rawHref, baseUrl).href;
+        if (!resolved.startsWith('http://') && !resolved.startsWith('https://')) continue;
+        if (seen.has(resolved)) continue;
+        seen.add(resolved);
+        links.push(resolved);
+        if (links.length >= 200) break;
+      } catch {
+        continue;
+      }
+    }
+
+    return links;
   }
 });

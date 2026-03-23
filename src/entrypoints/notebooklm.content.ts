@@ -111,11 +111,11 @@ export default defineContentScript({
        await smartSectionClickForce(dialog, 'level of detail', detailLabel);
 
        if (visualStyle) {
-          const styleSrcPart = {
+          const styleSrcPart = ({
             'sketch_note': 'sketchnote', 'kawaii': 'kawaii', 'professional': 'professional',
             'scientific': 'scientific', 'anime': 'anime', 'watercolor': 'watercolor',
             'retro_print': 'retro', 'heritage': 'heritage', 'paper_craft': 'paper'
-          }[visualStyle] || 'auto-select';
+          } as Record<string, string>)[visualStyle] || 'auto-select';
 
           const img = dialog.querySelector(`img[src*="${styleSrcPart}"]`);
           if (img) {

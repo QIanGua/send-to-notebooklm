@@ -1,305 +1,473 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { getSettings, saveSettings, type Settings, DEFAULT_SETTINGS } from '@/lib/settings';
   import { browser } from 'wxt/browser';
+  import { createNotebook, fetchNotebooks, type NotebookSummary } from '@/lib/notebooks';
+  import { getSettings, saveSettings, type Settings, DEFAULT_SETTINGS } from '@/lib/settings';
+  import BulkImportPage from './pages/BulkImportPage.svelte';
+  import NotebooksPage from './pages/NotebooksPage.svelte';
+  import PodcastsPage from './pages/PodcastsPage.svelte';
+  import ChatSettingsPage from './pages/ChatSettingsPage.svelte';
+  import SlideDeckPage from './pages/SlideDeckPage.svelte';
+  import InfographicPage from './pages/InfographicPage.svelte';
+  import type { ActiveTab, StatusTone, TabCandidate } from './types';
+
+  const toolLinks: Array<{ id: ActiveTab; label: string; badge?: string }> = [
+    { id: 'bulk-import', label: 'Bulk Import' },
+    { id: 'notebooks', label: 'Notebooks' },
+    { id: 'podcasts', label: 'Podcasts', badge: 'Soon' },
+  ];
+
+  const enhancerLinks: Array<{ id: ActiveTab; label: string }> = [
+    { id: 'chat', label: 'Configure Chat' },
+    { id: 'slide', label: 'Slide Deck' },
+    { id: 'infographic', label: 'Infographic' },
+  ];
+
+  const bulkImportModes: Array<{ id: string; label: string; badge?: string }> = [
+    { id: 'links', label: 'Links' },
+    { id: 'tabs', label: 'Browser Tabs', badge: 'Pro' },
+    { id: 'page-links', label: 'Page Links', badge: 'Pro' },
+    { id: 'youtube-playlist', label: 'YouTube Playlist', badge: 'Pro' },
+    { id: 'rss-feed', label: 'RSS Feed', badge: 'Pro' },
+  ];
 
   let settings: Settings = { ...DEFAULT_SETTINGS };
+  let activeTab: ActiveTab = 'bulk-import';
   let saving = false;
-  let savedMessage = '';
-  let activeTab = 'chat';
+  let savedMessage = 'Auto-save on';
+  let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
+  let settingsReady = false;
+  let lastSavedSettings = '';
 
-  onMount(async () => {
+  let notebooks: NotebookSummary[] = [];
+  let notebooksLoading = false;
+  let notebooksError = '';
+  let selectedNotebookId = '';
+  let defaultNotebookId = '';
+  let notebookSearch = '';
+  let creatingNotebook = false;
+
+  let bulkImportMode = 'links';
+  let bulkImportInput = '';
+  let bulkImporting = false;
+  let bulkImportStatus = '';
+  let bulkImportStatusTone: StatusTone = 'neutral';
+  let browserTabs: TabCandidate[] = [];
+  let currentTabId: number | null = null;
+  let currentWindowId: number | null = null;
+  let tabsFilterMode: 'all' | 'current' = 'all';
+  let selectedBrowserTabIds: number[] = [];
+  let tabsLoading = false;
+  let tabsError = '';
+  let pageLinkSourceUrl = '';
+  let pageLinks: string[] = [];
+  let pageLinksLoading = false;
+  let pageLinksError = '';
+  let notebookStatus = '';
+  let notebookStatusTone: StatusTone = 'neutral';
+
+  $: filteredNotebooks = notebooks.filter((notebook) =>
+    notebook.name.toLowerCase().includes(notebookSearch.trim().toLowerCase()),
+  );
+
+  $: parsedLinks = bulkImportInput
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  $: validLinks = parsedLinks.filter((line) => {
     try {
-      settings = await getSettings();
-    } catch (e) {
-      console.error('Failed to load settings', e);
+      const url = new URL(line);
+      return url.protocol === 'http:' || url.protocol === 'https:';
+    } catch {
+      return false;
     }
   });
 
-  async function handleSave() {
+  $: invalidLinkCount = parsedLinks.length - validLinks.length;
+  $: visibleBrowserTabs =
+    tabsFilterMode === 'current' && currentTabId !== null
+      ? browserTabs.filter((tab) => tab.id === currentTabId)
+      : browserTabs;
+  $: selectedBrowserTabs = visibleBrowserTabs.filter((tab) => selectedBrowserTabIds.includes(tab.id));
+  $: importUrls =
+    bulkImportMode === 'links'
+      ? validLinks
+      : bulkImportMode === 'tabs'
+        ? selectedBrowserTabs.map((tab) => tab.url)
+        : bulkImportMode === 'page-links'
+          ? pageLinks
+        : [];
+
+  onMount(async () => {
+    const [loadedSettings, saved] = await Promise.all([
+      getSettings(),
+      browser.storage.local.get(['selectedNotebookId']),
+    ]);
+
+    settings = loadedSettings || { ...DEFAULT_SETTINGS };
+    lastSavedSettings = JSON.stringify(settings);
+    settingsReady = true;
+    selectedNotebookId = (saved.selectedNotebookId as string) || '';
+    defaultNotebookId = selectedNotebookId;
+    await Promise.all([loadNotebooks(), loadBrowserTabs()]);
+  });
+
+  async function loadNotebooks() {
+    notebooksLoading = true;
+    notebooksError = '';
+
+    try {
+      notebooks = await fetchNotebooks();
+      if (!selectedNotebookId && notebooks.length > 0) {
+        selectedNotebookId = notebooks[0].id;
+        defaultNotebookId ||= notebooks[0].id;
+      }
+    } catch (error) {
+      notebooks = [];
+      notebooksError = error instanceof Error ? error.message : 'Could not fetch notebooks.';
+    } finally {
+      notebooksLoading = false;
+    }
+  }
+
+  async function persistSettings(statusText = 'Saved automatically') {
     saving = true;
     try {
       await saveSettings(settings);
-      savedMessage = 'Saved!';
+      lastSavedSettings = JSON.stringify(settings);
+      savedMessage = statusText;
       setTimeout(() => {
-        savedMessage = '';
+        if (!saving) {
+          savedMessage = 'Auto-save on';
+        }
       }, 2000);
-    } catch (e) {
-      console.error('Failed to save settings', e);
     } finally {
       saving = false;
     }
   }
 
-  const visualStyles = [
-    { id: 'auto_select', name: 'Auto' },
-    { id: 'sketch_note', name: 'Sketch' },
-    { id: 'kawaii', name: 'Kawaii' },
-    { id: 'professional', name: 'Pro' },
-    { id: 'scientific', name: 'Science' },
-    { id: 'anime', name: 'Anime' },
-  ];
+  function scheduleSettingsSave(delay = 250) {
+    if (!settingsReady) return;
 
-  const sidebarLinks = [
-    { id: 'chat', label: 'Configure Chat', icon: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z' },
-    { id: 'slide', label: 'Slide Deck', icon: 'M2 3h20v14H2z M8 21h8 M12 17v4' },
-    { id: 'infographic', label: 'Infographic', icon: 'M12 20v-6M6 20V10M18 20V4' },
-  ];
+    const serialized = JSON.stringify(settings);
+    if (serialized === lastSavedSettings) return;
+
+    if (autosaveTimer) {
+      clearTimeout(autosaveTimer);
+    }
+
+    savedMessage = 'Saving...';
+    autosaveTimer = setTimeout(() => {
+      autosaveTimer = null;
+      void persistSettings();
+    }, delay);
+  }
+
+  function handleSettingsChange(delay = 250) {
+    scheduleSettingsSave(delay);
+  }
+
+  async function handleCreateNotebook() {
+    creatingNotebook = true;
+    try {
+      const notebookId = await createNotebook();
+      selectedNotebookId = notebookId;
+      defaultNotebookId = notebookId;
+      await browser.storage.local.set({ selectedNotebookId: notebookId });
+      await loadNotebooks();
+      bulkImportStatus = 'New notebook created and selected.';
+      bulkImportStatusTone = 'success';
+      notebookStatus = 'Notebook created and set as default.';
+      notebookStatusTone = 'success';
+    } catch (error) {
+      bulkImportStatus = error instanceof Error ? error.message : 'Could not create notebook.';
+      bulkImportStatusTone = 'error';
+      notebookStatus = bulkImportStatus;
+      notebookStatusTone = 'error';
+    } finally {
+      creatingNotebook = false;
+    }
+  }
+
+  async function handleBulkImport() {
+    if (!selectedNotebookId || importUrls.length === 0 || !['links', 'tabs', 'page-links'].includes(bulkImportMode)) return;
+
+    bulkImporting = true;
+    bulkImportStatus =
+      bulkImportMode === 'tabs'
+        ? 'Importing browser tabs...'
+        : bulkImportMode === 'page-links'
+          ? 'Importing page links...'
+          : 'Importing links...';
+    bulkImportStatusTone = 'neutral';
+
+    try {
+      const response = (await browser.runtime.sendMessage({
+        type: 'send-to-notebook',
+        notebookId: selectedNotebookId,
+        urls: importUrls,
+      })) as { ok?: boolean; error?: string; notebookUrl?: string };
+
+      if (!response.ok) {
+        throw new Error(response.error || 'Import failed.');
+      }
+
+      await browser.storage.local.set({ selectedNotebookId });
+      defaultNotebookId = selectedNotebookId;
+      bulkImportStatus = `Imported ${importUrls.length} source${importUrls.length > 1 ? 's' : ''}.`;
+      bulkImportStatusTone = 'success';
+
+      if (response.notebookUrl) {
+        await browser.tabs.create({ url: response.notebookUrl });
+      }
+    } catch (error) {
+      bulkImportStatus = error instanceof Error ? error.message : 'Import failed.';
+      bulkImportStatusTone = 'error';
+    } finally {
+      bulkImporting = false;
+    }
+  }
+
+  async function setDefaultNotebook(notebookId: string) {
+    defaultNotebookId = notebookId;
+    selectedNotebookId = notebookId;
+    await browser.storage.local.set({ selectedNotebookId: notebookId });
+    notebookStatus = 'Default notebook updated.';
+    notebookStatusTone = 'success';
+  }
+
+  async function loadBrowserTabs() {
+    tabsLoading = true;
+    tabsError = '';
+
+    try {
+      const [currentActiveTab, tabs] = await Promise.all([
+        browser.tabs.query({ active: true, currentWindow: true }),
+        browser.tabs.query({}),
+      ]);
+      const seen = new Set<string>();
+      currentTabId = currentActiveTab[0]?.id ?? null;
+      currentWindowId = currentActiveTab[0]?.windowId ?? null;
+
+      browserTabs = tabs
+        .map((tab) => {
+          const rawUrl = String(tab.url || '').trim();
+          if (!rawUrl.startsWith('http://') && !rawUrl.startsWith('https://')) return null;
+
+          try {
+            const parsed = new URL(rawUrl);
+            if (seen.has(parsed.href)) return null;
+            seen.add(parsed.href);
+
+            return {
+              id: tab.id || 0,
+              title: tab.title || parsed.hostname,
+              url: parsed.href,
+              hostname: parsed.hostname,
+              windowId: tab.windowId || 0,
+              isActive: Boolean(tab.active),
+              isCurrentWindow: currentWindowId !== null && tab.windowId === currentWindowId,
+            } satisfies TabCandidate;
+          } catch {
+            return null;
+          }
+        })
+        .filter((tab): tab is TabCandidate => Boolean(tab));
+
+      const visibleIds = new Set(visibleBrowserTabs.map((tab) => tab.id));
+      selectedBrowserTabIds = selectedBrowserTabIds.filter((id) => visibleIds.has(id));
+
+      if (selectedBrowserTabIds.length === 0) {
+        selectedBrowserTabIds = currentTabId !== null ? [currentTabId] : browserTabs.slice(0, 1).map((tab) => tab.id);
+      }
+
+      if (!pageLinkSourceUrl || !browserTabs.some((tab) => tab.url === pageLinkSourceUrl)) {
+        pageLinkSourceUrl = browserTabs[0]?.url || '';
+      }
+    } catch (error) {
+      browserTabs = [];
+      currentTabId = null;
+      currentWindowId = null;
+      selectedBrowserTabIds = [];
+      tabsError = error instanceof Error ? error.message : 'Could not load browser tabs.';
+    } finally {
+      tabsLoading = false;
+    }
+  }
+
+  function handleBulkImportModeChange(modeId: string) {
+    bulkImportMode = modeId;
+    if (modeId === 'tabs' && browserTabs.length === 0 && !tabsLoading) {
+      void loadBrowserTabs();
+    }
+  }
+
+  function toggleBrowserTab(tabId: number) {
+    selectedBrowserTabIds = selectedBrowserTabIds.includes(tabId)
+      ? selectedBrowserTabIds.filter((id) => id !== tabId)
+      : [...selectedBrowserTabIds, tabId];
+  }
+
+  function selectAllVisibleBrowserTabs() {
+    selectedBrowserTabIds = visibleBrowserTabs.map((tab) => tab.id);
+  }
+
+  function selectCurrentBrowserTab() {
+    selectedBrowserTabIds = currentTabId !== null ? [currentTabId] : [];
+    tabsFilterMode = 'current';
+  }
+
+  async function fetchPageLinksForSource() {
+    if (!pageLinkSourceUrl) return;
+
+    pageLinksLoading = true;
+    pageLinksError = '';
+
+    try {
+      const response = (await browser.runtime.sendMessage({
+        type: 'fetch-page-links',
+        url: pageLinkSourceUrl,
+      })) as { ok?: boolean; links?: string[]; error?: string };
+
+      if (!response.ok) {
+        throw new Error(response.error || 'Could not fetch page links.');
+      }
+
+      pageLinks = response.links || [];
+      bulkImportStatus = pageLinks.length
+        ? `Scanned page and found ${pageLinks.length} link${pageLinks.length > 1 ? 's' : ''}.`
+        : 'Scanned page but found no importable links.';
+      bulkImportStatusTone = pageLinks.length ? 'success' : 'neutral';
+    } catch (error) {
+      pageLinks = [];
+      pageLinksError = error instanceof Error ? error.message : 'Could not fetch page links.';
+      bulkImportStatus = pageLinksError;
+      bulkImportStatusTone = 'error';
+    } finally {
+      pageLinksLoading = false;
+    }
+  }
 </script>
 
-<main class="flex h-screen w-full bg-white text-[#1c160f] font-sans overflow-hidden">
-  <!-- Sidebar -->
-  <aside class="w-64 bg-[#f9f9f8] border-r border-[#e5e5e5] flex flex-col pt-8">
-    <div class="px-6 mb-8 flex flex-col gap-1">
-      <h1 class="text-xs font-bold text-[#888] uppercase tracking-wider">Settings</h1>
+<main class="flex min-h-screen w-full overflow-hidden bg-[#f4efe8] text-[#1c160f]">
+  <aside class="flex w-[290px] flex-col border-r border-[#e6ddd3] bg-[#f7f2eb]">
+    <div class="border-b border-[#e6ddd3] px-6 py-6">
+      <div class="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8e8882]">Send to NotebookLM</div>
+      <h1 class="text-xl font-semibold tracking-tight text-[#17120d]">Workspace</h1>
+      <p class="mt-2 text-sm text-[#6d655e]">Organize imports, manage notebooks, and keep your enhancer defaults in one place.</p>
     </div>
 
-    <nav class="flex-1 px-3 space-y-0.5">
-      {#each sidebarLinks as link}
-        <button 
-          on:click={() => activeTab = link.id}
-          class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors {activeTab === link.id ? 'bg-[#ececeb] text-black' : 'text-[#555] hover:bg-[#efefee]'}"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="opacity-70">
-            <path d={link.icon} />
-          </svg>
-          {link.label}
-        </button>
-      {/each}
-    </nav>
+    <div class="flex-1 space-y-8 overflow-y-auto px-4 py-6">
+      <div class="space-y-2">
+        <h2 class="px-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8e8882]">Tools</h2>
+        <nav class="space-y-1">
+          {#each toolLinks as link}
+            <button
+              on:click={() => (activeTab = link.id)}
+              class={`flex w-full items-center justify-between rounded-2xl px-3 py-2.5 text-left text-sm font-medium transition ${
+                activeTab === link.id ? 'bg-white text-[#17120d]' : 'text-[#514b45] hover:bg-white/70'
+              }`}
+            >
+              <span>{link.label}</span>
+              {#if link.badge}
+                <span class="rounded-full border border-[#ddd6ce] bg-[#f8f4ef] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8b6b4c]">
+                  {link.badge}
+                </span>
+              {/if}
+            </button>
+          {/each}
+        </nav>
+      </div>
 
-    <div class="p-4 border-t border-[#e5e5e5] bg-[#f9f9f8]">
-      <button 
-        on:click={handleSave}
-        disabled={saving}
-        class="w-full py-2 rounded-lg bg-[#8b5cf6] hover:bg-[#7c3aed] text-white text-sm font-semibold shadow-sm transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-      >
-        {#if saving}
-          <div class="w-3 h-3 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
-        {/if}
-        {savedMessage || 'Save Changes'}
-      </button>
-      <div class="mt-4 flex items-center justify-between px-2 text-[10px] text-[#999] font-medium uppercase tracking-widest">
-        <span>v2.1.0</span>
-        <span>Default Template</span>
+      <div class="space-y-2">
+        <h2 class="px-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8e8882]">Enhancer</h2>
+        <nav class="space-y-1">
+          {#each enhancerLinks as link}
+            <button
+              on:click={() => (activeTab = link.id)}
+              class={`flex w-full rounded-2xl px-3 py-2.5 text-left text-sm font-medium transition ${
+                activeTab === link.id ? 'bg-white text-[#17120d]' : 'text-[#514b45] hover:bg-white/70'
+              }`}
+            >
+              {link.label}
+            </button>
+          {/each}
+        </nav>
+      </div>
+    </div>
+
+    <div class="border-t border-[#e6ddd3] bg-[#f7f2eb] p-4">
+      <div class="rounded-2xl border border-[#ddd6ce] bg-white px-4 py-3 text-sm font-medium text-[#6d655e]">
+        {savedMessage}
       </div>
     </div>
   </aside>
 
-  <!-- Content -->
-  <section class="flex-1 overflow-y-auto bg-white">
-    <div class="max-w-[720px] mx-auto px-8 py-12">
-      
-      {#if activeTab === 'chat'}
-        <header class="mb-10">
-          <h2 class="text-2xl font-bold mb-1">Configure Chat</h2>
-          <p class="text-sm text-[#888]">Default chat preferences for NotebookLM.</p>
-        </header>
-
-        <div class="space-y-0 divide-y divide-[#efefef]">
-          <!-- Goal Row -->
-          <div class="py-6 flex items-start justify-between gap-12">
-            <div class="flex-1">
-              <h3 class="text-sm font-semibold mb-1">Conversational Goal</h3>
-              <p class="text-xs text-[#888]">Define your objective, style, or persona.</p>
-            </div>
-            <div class="flex flex-col items-end gap-3">
-              <select 
-                bind:value={settings.chat.goal}
-                class="bg-white border border-[#ddd] rounded-lg px-3 py-1.5 text-xs font-medium focus:ring-2 focus:ring-[#8b5cf6]/20 outline-none min-w-[160px]"
-              >
-                <option value="default">Default</option>
-                <option value="learning_guide">Learning Guide</option>
-                <option value="custom">Custom</option>
-              </select>
-            </div>
-          </div>
-
-          {#if settings.chat.goal === 'custom'}
-            <div class="py-6">
-              <h3 class="text-sm font-semibold mb-2">Custom Prompt</h3>
-              <textarea 
-                bind:value={settings.chat.customPrompt}
-                placeholder="Enter persona or special instructions..."
-                class="w-full bg-[#fcfcfc] border border-[#ddd] rounded-xl p-4 text-xs focus:bg-white focus:ring-2 focus:ring-[#8b5cf6]/20 outline-none transition-all h-32"
-              ></textarea>
-            </div>
-          {/if}
-
-          <!-- Length Row -->
-          <div class="py-6 flex items-start justify-between gap-12">
-            <div class="flex-1">
-              <h3 class="text-sm font-semibold mb-1">Response Length</h3>
-              <p class="text-xs text-[#888]">Choose how detailed the AI responses should be.</p>
-            </div>
-            <select 
-              bind:value={settings.chat.responseLength}
-              class="bg-white border border-[#ddd] rounded-lg px-3 py-1.5 text-xs font-medium focus:ring-2 focus:ring-[#8b5cf6]/20 outline-none min-w-[160px]"
-            >
-              <option value="default">Default</option>
-              <option value="longer">Longer</option>
-              <option value="shorter">Shorter</option>
-            </select>
-          </div>
-        </div>
+  <section class="flex-1 overflow-y-auto">
+    <div class="mx-auto max-w-[1180px] px-8 py-8">
+      {#if activeTab === 'bulk-import'}
+        <BulkImportPage
+          {notebooks}
+          {notebooksLoading}
+          {notebooksError}
+          bind:selectedNotebookId
+          {creatingNotebook}
+          {bulkImportModes}
+          {bulkImportMode}
+          bind:bulkImportInput
+          {parsedLinks}
+          {validLinks}
+          {invalidLinkCount}
+          {importUrls}
+          {bulkImporting}
+          {bulkImportStatus}
+          {bulkImportStatusTone}
+          {browserTabs}
+          {visibleBrowserTabs}
+          {currentTabId}
+          {currentWindowId}
+          {selectedBrowserTabIds}
+          bind:tabsFilterMode
+          {tabsLoading}
+          {tabsError}
+          bind:pageLinkSourceUrl
+          {pageLinks}
+          {pageLinksLoading}
+          {pageLinksError}
+          onSelectBulkImportMode={handleBulkImportModeChange}
+          onCreateNotebook={handleCreateNotebook}
+          onBulkImport={handleBulkImport}
+          onLoadNotebooks={loadNotebooks}
+          onLoadBrowserTabs={loadBrowserTabs}
+          onToggleBrowserTab={toggleBrowserTab}
+          onSelectAllVisibleBrowserTabs={selectAllVisibleBrowserTabs}
+          onSelectCurrentBrowserTab={selectCurrentBrowserTab}
+          onFetchPageLinks={fetchPageLinksForSource}
+        />
+      {:else if activeTab === 'notebooks'}
+        <NotebooksPage
+          {notebooksLoading}
+          {notebooksError}
+          {filteredNotebooks}
+          bind:notebookSearch
+          {defaultNotebookId}
+          {creatingNotebook}
+          {notebookStatus}
+          {notebookStatusTone}
+          onCreateNotebook={handleCreateNotebook}
+          onLoadNotebooks={loadNotebooks}
+          onSetDefaultNotebook={setDefaultNotebook}
+        />
+      {:else if activeTab === 'podcasts'}
+        <PodcastsPage />
+      {:else if activeTab === 'chat'}
+        <ChatSettingsPage {settings} onSettingsChange={handleSettingsChange} />
+      {:else if activeTab === 'slide'}
+        <SlideDeckPage {settings} onSettingsChange={handleSettingsChange} />
+      {:else if activeTab === 'infographic'}
+        <InfographicPage {settings} onSettingsChange={handleSettingsChange} />
       {/if}
-
-      {#if activeTab === 'slide'}
-        <header class="mb-10">
-          <h2 class="text-2xl font-bold mb-1">Slide Deck Settings</h2>
-          <p class="text-sm text-[#888]">Configure default format for generated slides.</p>
-        </header>
-
-        <div class="space-y-0 divide-y divide-[#efefef]">
-          <div class="py-6 flex items-start justify-between gap-12">
-            <div class="flex-1">
-              <h3 class="text-sm font-semibold mb-1">Format</h3>
-              <p class="text-xs text-[#888]">Choose the structural style of slides.</p>
-            </div>
-            <select 
-              bind:value={settings.slideDeck.format}
-              class="bg-white border border-[#ddd] rounded-lg px-3 py-1.5 text-xs font-medium focus:ring-2 focus:ring-[#8b5cf6]/20 outline-none min-w-[160px]"
-            >
-              <option value="detailed_deck">Detailed Deck</option>
-              <option value="presenter_slides">Presenter Slides</option>
-            </select>
-          </div>
-
-          <div class="py-6 flex items-start justify-between gap-12">
-            <div class="flex-1">
-              <h3 class="text-sm font-semibold mb-1">Language</h3>
-              <p class="text-xs text-[#888]">Default writing language for slides.</p>
-            </div>
-            <select 
-              bind:value={settings.slideDeck.language}
-              class="bg-white border border-[#ddd] rounded-lg px-3 py-1.5 text-xs font-medium focus:ring-2 focus:ring-[#8b5cf6]/20 outline-none min-w-[160px]"
-            >
-              <option value="zh">Chinese (Simplified)</option>
-              <option value="en">English</option>
-            </select>
-          </div>
-
-          <div class="py-6 flex items-start justify-between gap-12">
-            <div class="flex-1">
-              <h3 class="text-sm font-semibold mb-1">Length</h3>
-              <p class="text-xs text-[#888]">Target number of slides or detail level.</p>
-            </div>
-            <div class="flex bg-[#f3f3f3] p-1 rounded-lg gap-1">
-              {#each ['short', 'default'] as l}
-                <button 
-                  on:click={() => settings.slideDeck.length = l}
-                  class="px-4 py-1.5 rounded-md text-[11px] font-bold transition-all {settings.slideDeck.length === l ? 'bg-white shadow-sm text-black' : 'text-[#888]'}"
-                >
-                  {l.toUpperCase()}
-                </button>
-              {/each}
-            </div>
-          </div>
-
-          <div class="py-6">
-            <h3 class="text-sm font-semibold mb-1">Custom Focus Prompt</h3>
-            <p class="text-xs text-[#888] mb-3">e.g. Focus on step-by-step instructions...</p>
-            <textarea 
-              bind:value={settings.slideDeck.customPrompt}
-              placeholder="Enter your custom preference..."
-              class="w-full bg-[#fcfcfc] border border-[#ddd] rounded-xl p-4 text-xs focus:bg-white focus:ring-2 focus:ring-[#8b5cf6]/20 outline-none transition-all h-24"
-            ></textarea>
-          </div>
-        </div>
-      {/if}
-
-      {#if activeTab === 'infographic'}
-        <header class="mb-10">
-          <h2 class="text-2xl font-bold mb-1">Infographic Settings</h2>
-          <p class="text-sm text-[#888]">Define visual report defaults.</p>
-        </header>
-
-        <div class="space-y-0 divide-y divide-[#efefef]">
-          <div class="py-6 flex items-start justify-between gap-12">
-            <div class="flex-1">
-              <h3 class="text-sm font-semibold mb-1">Language</h3>
-              <p class="text-xs text-[#888]">Text language within visual charts.</p>
-            </div>
-            <select 
-              bind:value={settings.infographic.language}
-              class="bg-white border border-[#ddd] rounded-lg px-3 py-1.5 text-xs font-medium focus:ring-2 focus:ring-[#8b5cf6]/20 outline-none min-w-[160px]"
-            >
-              <option value="zh">Chinese (Simplified)</option>
-              <option value="en">English</option>
-            </select>
-          </div>
-
-          <div class="py-6 flex items-start justify-between gap-12">
-            <div class="flex-1">
-              <h3 class="text-sm font-semibold mb-1">Orientation</h3>
-              <p class="text-xs text-[#888]">Default layout direction.</p>
-            </div>
-            <div class="flex bg-[#f3f3f3] p-1 rounded-lg gap-1">
-              {#each ['landscape', 'portrait', 'square'] as o}
-                <button 
-                  on:click={() => settings.infographic.orientation = o}
-                  class="px-4 py-1.5 rounded-md text-[11px] font-bold transition-all {settings.infographic.orientation === o ? 'bg-white shadow-sm text-black' : 'text-[#888]'}"
-                >
-                  {o.toUpperCase()}
-                </button>
-              {/each}
-            </div>
-          </div>
-
-          <div class="py-6">
-            <h3 class="text-sm font-semibold mb-1">Visual Style</h3>
-            <p class="text-xs text-[#888] mb-4">Choose default visual expression style.</p>
-            <div class="grid grid-cols-3 sm:grid-cols-6 gap-3">
-              {#each visualStyles as style}
-                <button 
-                  on:click={() => settings.infographic.visualStyle = style.id}
-                  class="flex flex-col items-center justify-center p-3 rounded-xl border transition-all gap-1.5 {settings.infographic.visualStyle === style.id ? 'border-[#8b5cf6] bg-[#8b5cf6]/5 text-[#8b5cf6]' : 'bg-[#fcfcfc] border-[#eee] text-[#999] hover:border-[#ddd]'}"
-                >
-                  <span class="text-[10px] font-bold uppercase tracking-tighter">{style.name}</span>
-                </button>
-              {/each}
-            </div>
-          </div>
-
-          <div class="py-6 flex items-start justify-between gap-12">
-            <div class="flex-1">
-              <h3 class="text-sm font-semibold mb-1">Detail Level</h3>
-              <p class="text-xs text-[#888]">Data density in charts.</p>
-            </div>
-            <select 
-              bind:value={settings.infographic.detailLevel}
-              class="bg-white border border-[#ddd] rounded-lg px-3 py-1.5 text-xs font-medium focus:ring-2 focus:ring-[#8b5cf6]/20 outline-none min-w-[160px]"
-            >
-              <option value="concise">Concise</option>
-              <option value="standard">Standard</option>
-              <option value="detailed">Detailed</option>
-            </select>
-          </div>
-
-          <div class="py-6">
-            <h3 class="text-sm font-semibold mb-1">Style or Focus Prompt</h3>
-            <p class="text-xs text-[#888] mb-3">e.g. Use a retro print style with high contrast...</p>
-            <textarea 
-              bind:value={settings.infographic.customPrompt}
-              placeholder="Enter your custom preference..."
-              class="w-full bg-[#fcfcfc] border border-[#ddd] rounded-xl p-4 text-xs focus:bg-white focus:ring-2 focus:ring-[#8b5cf6]/20 outline-none transition-all h-32"
-            ></textarea>
-          </div>
-        </div>
-      {/if}
-
     </div>
   </section>
 </main>
-
-<style>
-  :global(body) {
-    margin: 0;
-    padding: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  }
-  
-  textarea {
-    resize: none;
-  }
-</style>
