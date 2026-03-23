@@ -56,7 +56,7 @@ function removeExistingLauncher() {
 
 let isMounting = false;
 
-async function mountLaunchers(ctx: any) {
+async function mountLaunchers(ctx: any, retryCount = 0) {
   const adapter = getSiteAdapter();
   if (!adapter || isMounting || !ctx || document.querySelector('stn-inline-launcher')) {
     return;
@@ -69,6 +69,10 @@ async function mountLaunchers(ctx: any) {
 
   const anchor = adapter.findMountAnchor();
   if (!anchor) {
+    // If we're on a page that should have a launcher but anchor isn't found, retry a few times
+    if (retryCount < 10) {
+      setTimeout(() => void mountLaunchers(ctx, retryCount + 1), 500);
+    }
     return;
   }
 

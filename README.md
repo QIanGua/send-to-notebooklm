@@ -1,61 +1,62 @@
-# Send to NotebookLM
+# Send to NotebookLM (STN)
 
-Chrome extension for sending web pages, arXiv PDFs, and YouTube videos to NotebookLM.
+[![Version](https://img.shields.io/badge/version-2.1.0-blue.svg)](package.json)
 
-## Features
+[English](README.md) | [简体中文](README.zh-CN.md)
 
-- Send the current page URL to a NotebookLM notebook from the popup
-- Create a new notebook before importing arXiv PDFs or YouTube URLs
-- Add to an existing notebook from popup quick mode or inline launcher
-- Use inline launchers on supported arXiv and YouTube pages
-- Use context-menu entries for current page or links
+Send to NotebookLM is a powerful browser extension designed to streamline your research workflow by capturing web pages, arXiv papers, and YouTube videos directly into Google NotebookLM. It also features a built-in "Enhancer" to automate your generation settings.
 
-## Usage
+## ✨ Key Features
 
-1. Open [NotebookLM](https://notebooklm.google.com/) in the same browser profile and sign in.
-2. Open a regular page, an arXiv paper page, or a YouTube video page.
-3. Use the popup, inline launcher, or context-menu action to send content.
+### 🚀 One-Click Capture
+- **YouTube**: Automatically extracts video transcripts and sends them to your notebook via an inline "Send to NotebookLM" button in the action bar.
+- **arXiv**: Detects paper abstracts and PDFs, providing an inline button to import them as PDF sources.
+- **Universal Web Pages**: Send any web page URL to NotebookLM from the extension popup or context menu.
 
-## Quick Modes
+### 🛠️ NotebookLM Enhancer
+Automatically applies your preferred presets when generating artifacts in NotebookLM:
+- **Chat**: Configure default conversational goals (e.g., Learning Guide) and response lengths.
+- **Slide Deck**: Set preferred format (Detailed vs. Presenter), language, and length.
+- **Infographic**: Customize orientation (Landscape/Portrait), visual style (Sketch, Anime, etc.), and detail level.
 
-- arXiv pages import the paper PDF, either into a new notebook or an existing one
-- YouTube video pages import the canonical watch URL, either into a new notebook or an existing one
+### 📱 Seamless UX
+- **Inline Launchers**: Native-feeling buttons injected directly into YouTube and arXiv.
+- **Quick Popup**: Manage your notebook lists and send content without leaving the current tab.
+- **Context Menu**: Right-click any page or link to send it instantly.
 
-## Load Locally
+## 📥 Installation
 
-1. Open `chrome://extensions`
-2. Enable `Developer mode`
-3. Click `Load unpacked`
-4. Select this repository's built extension directory after running `npm run build`:
+1. Download or clone this repository.
+2. Build the extension:
+   ```bash
+   bun install
+   bun run build
+   ```
+3. Open Chrome and navigate to `chrome://extensions/`.
+4. Enable **Developer mode** (top right).
+5. Click **Load unpacked** and select the `.output/chrome-mv3` directory.
 
-```text
-.output/chrome-mv3
-```
+## 📖 Usage
 
-## Development
+1. Open [NotebookLM](https://notebooklm.google.com/) and ensure you are signed in.
+2. Navigate to a YouTube video, arXiv paper, or any web page.
+3. Click the **Send to NotebookLM** button (inline or in the popup).
+4. Choose an existing notebook or create a new one to import the content.
+5. In the **Options** page, you can pre-configure your Enhancer settings for Chat, Slides, and Infographics.
+
+## 🛠️ Development
+
+This project is built with [WXT](https://wxt.dev/), [Svelte](https://svelte.dev/), and [Tailwind CSS](https://tailwindcss.com/).
 
 ```bash
-npm install
-npm run dev
+# Install dependencies
+bun install
+
+# Start development server
+bun run dev
+
+# Build for production
+bun run build
 ```
 
-## Build
 
-```bash
-npm run build
-```
-
-Production output is generated in `.output/chrome-mv3/`.
-
-## Notes
-
-- The extension depends on your active NotebookLM browser session
-- NotebookLM internal RPC identifiers may change over time
-- Inline launcher placement may need adjustment if a supported website changes its DOM structure
-
-## Extending Website Support
-
-- Website-specific logic lives in `src/lib/site-adapters.ts`
-- Each adapter declares URL matching, source extraction, mount point discovery, and insertion strategy
-- The content script now injects only on supported websites, reducing overhead on unrelated pages
-- NotebookLM tokens and notebook lists are cached briefly in the background script to reduce repeated waits

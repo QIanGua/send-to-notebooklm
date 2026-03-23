@@ -128,8 +128,8 @@ export const siteAdapters: SiteAdapter[] = [
       return document.querySelector(YOUTUBE_ACTION_SELECTORS);
     },
     insertPosition: 'last',
-    initialMountDelayMs: 1200,
-    remountDelayMs: 700,
+    initialMountDelayMs: 500,
+    remountDelayMs: 300,
     hostStyle: {
       display: 'flex',
       alignItems: 'center',
