@@ -35,29 +35,31 @@ export function cleanText(value: string | null | undefined) {
   return String(value || '').replace(/\s+/g, ' ').trim();
 }
 
-export function collectBasePageContext(): Omit<PageContext, 'site' | 'arxiv' | 'youtube'> {
-  const selection = window.getSelection?.();
-  const canonicalLink = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
-  const descriptionMeta = document.querySelector(
-    'meta[name="description"], meta[property="og:description"]',
-  ) as HTMLMetaElement | null;
-  const authorMeta = document.querySelector(
-    'meta[name="author"], meta[property="article:author"]',
-  ) as HTMLMetaElement | null;
-
+/**
+ * Creates a minimal PageContext object with default values.
+ * Safe to use in background scripts or anywhere without DOM access.
+ */
+export function createEmptyPageContext(url: string, title?: string): PageContext {
   return {
-    title: cleanText(document.title),
-    url: location.href,
-    canonicalUrl: canonicalLink?.href || location.href,
-    description: cleanText(descriptionMeta?.content),
-    selectedText: cleanText(selection?.toString()),
-    byline: cleanText(authorMeta?.content),
+    title: title || '',
+    url,
+    canonicalUrl: url,
+    description: '',
+    selectedText: '',
+    byline: '',
+    site: null,
+    arxiv: null,
+    youtube: null,
   };
 }
 
-export function buildPageContext(site: SiteContext | null): PageContext {
+/**
+ * Enriches a PageContext with site-specific metadata (arXiv, YouTube, etc.)
+ * based on the provided SiteContext.
+ */
+export function enrichPageContextWithSite(page: PageContext, site: SiteContext | null): PageContext {
   return {
-    ...collectBasePageContext(),
+    ...page,
     site,
     arxiv: site?.id === 'arxiv'
       ? {
@@ -76,6 +78,44 @@ export function buildPageContext(site: SiteContext | null): PageContext {
         }
       : null,
   };
+}
+
+/**
+ * Original helper for content scripts. Collects base data from DOM.
+ */
+export function collectBasePageContext(): Omit<PageContext, 'site' | 'arxiv' | 'youtube'> {
+  const selection = typeof window !== 'undefined' && window.getSelection ? window.getSelection() : null;
+  const canonicalLink = typeof document !== 'undefined' ? document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null : null;
+  const descriptionMeta = typeof document !== 'undefined' ? document.querySelector(
+    'meta[name="description"], meta[property="og:description"]',
+  ) as HTMLMetaElement | null : null;
+  const authorMeta = typeof document !== 'undefined' ? document.querySelector(
+    'meta[name="author"], meta[property="article:author"]',
+  ) as HTMLMetaElement | null : null;
+
+  return {
+    title: typeof document !== 'undefined' ? cleanText(document.title) : '',
+    url: typeof location !== 'undefined' ? location.href : '',
+    canonicalUrl: canonicalLink?.href || (typeof location !== 'undefined' ? location.href : ''),
+    description: cleanText(descriptionMeta?.content),
+    selectedText: cleanText(selection?.toString()),
+    byline: cleanText(authorMeta?.content),
+  };
+}
+
+/**
+ * Combines DOM collection with site enrichment. Used by content scripts.
+ */
+export function buildPageContext(site: SiteContext | null): PageContext {
+  const base = collectBasePageContext();
+  const page = {
+    ...base,
+    site: null,
+    arxiv: null,
+    youtube: null,
+  } as PageContext;
+  
+  return enrichPageContextWithSite(page, site);
 }
 
 export function getPreferredSourceUrl(page: Partial<PageContext> | null | undefined) {

@@ -1,0 +1,14 @@
+{
+  "users": {},
+  "licenses": {
+    "STN-PRO-DEMO-2026": {
+      "code": "STN-PRO-DEMO-2026",
+      "plan": "pro",
+      "type": "lifetime",
+      "status": "active",
+      "boundUserId": null,
+      "redeemedAt": null,
+      "expiresAt": null
+    }
+  }
+}

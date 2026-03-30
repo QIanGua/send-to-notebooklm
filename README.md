@@ -59,4 +59,54 @@ bun run dev
 bun run build
 ```
 
+## Google Login Setup
 
+To enable Google sign-in for Pro entitlement, configure a real OAuth client ID before building:
+
+1. Follow [docs/google-oauth-setup.md](/Users/qianlong/tries/2026-03-19-send-to-notebooklm/send-to-notebooklm/docs/google-oauth-setup.md).
+2. Copy `.env.example` to `.env.local`.
+3. Fill `WXT_GOOGLE_OAUTH_CLIENT_ID` and `WXT_API_BASE_URL`.
+4. Rebuild the extension and reload `.output/chrome-mv3`.
+5. Implement the entitlement API contract in [docs/entitlements-api.md](/Users/qianlong/tries/2026-03-19-send-to-notebooklm/send-to-notebooklm/docs/entitlements-api.md).
+
+## Minimal Entitlement Backend
+
+This repo now includes a zero-dependency Node backend for local testing:
+
+```bash
+npm run backend:dev
+```
+
+Default server:
+
+- `http://127.0.0.1:8788`
+
+Default demo license:
+
+- `STN-PRO-DEMO-2026`
+
+Backend details:
+
+- [backend/minimal-entitlements-server.mjs](/Users/qianlong/tries/2026-03-19-send-to-notebooklm/send-to-notebooklm/backend/minimal-entitlements-server.mjs)
+- [docs/entitlements-api.md](/Users/qianlong/tries/2026-03-19-send-to-notebooklm/send-to-notebooklm/docs/entitlements-api.md)
+
+## Firebase + Paddle Backend
+
+This repo also includes a production-oriented backend skeleton for Firestore entitlements and Paddle webhooks:
+
+```bash
+npm run backend:firebase
+```
+
+It expects:
+
+- `firebase-admin` installed in your backend runtime
+- Firebase Admin credentials in environment variables
+- Paddle webhook secret
+- Hosted checkout and billing portal URLs
+
+References:
+
+- [backend/firebase-paddle-server.mjs](/Users/qianlong/tries/2026-03-19-send-to-notebooklm/send-to-notebooklm/backend/firebase-paddle-server.mjs)
+- [docs/firebase-paddle-architecture.md](/Users/qianlong/tries/2026-03-19-send-to-notebooklm/send-to-notebooklm/docs/firebase-paddle-architecture.md)
+- [docs/entitlements-api.md](/Users/qianlong/tries/2026-03-19-send-to-notebooklm/send-to-notebooklm/docs/entitlements-api.md)

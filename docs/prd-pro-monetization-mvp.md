@@ -65,17 +65,24 @@ This release should make the product feel meaningfully more powerful for frequen
 28. As a user who hits a Pro-only action, I want a clear upgrade explanation instead of a broken or confusing experience, so that the paywall feels fair.
 29. As a product owner, I want the Pro surface area to be meaningful but limited, so that the team can ship a credible paid MVP quickly.
 30. As a product owner, I want Free to remain strong enough to drive store growth and referrals, so that monetization does not suppress adoption.
-31. As a product owner, I want the MVP to work without a mandatory cloud backend, so that launch complexity and support burden stay low.
+31. As a product owner, I want the MVP to work without a mandatory cloud backend for free sending, so that launch complexity and support burden stay low.
 32. As a developer, I want Pro entitlement checks abstracted behind a simple interface, so that the product can start local-first and later migrate to license or cloud validation.
-33. As a developer, I want import logic reused across popup, inline launcher, and context menu flows, so that Pro behavior stays consistent across entry points.
-34. As a developer, I want the batch import pipeline to be testable independently of the UI, so that import behavior can evolve safely.
-35. As a support owner, I want clear event and error states around dedupe, routing, and history, so that support issues can be triaged quickly.
+33. As a Pro user, I want to sign in with my Google account, so that my paid entitlement can be attached to a stable identity across browsers and reinstalls.
+34. As a returning user, I want the extension to remember my signed-in account and plan state, so that I do not need to re-authenticate every time.
+35. As a user who is signed in but not paid, I want Pro features to explain that an active entitlement is still required, so that login and billing do not feel confusing.
+36. As a developer, I want import logic reused across popup, inline launcher, and context menu flows, so that Pro behavior stays consistent across entry points.
+37. As a developer, I want the batch import pipeline to be testable independently of the UI, so that import behavior can evolve safely.
+38. As a support owner, I want clear event and error states around sign-in, entitlement fetch, dedupe, routing, and history, so that support issues can be triaged quickly.
 
 ## Implementation Decisions
 
 - The product will launch with a Free tier and a Pro tier. Free retains the current single-source send flows. Pro adds batch import, deduplication, auto-routing, import history, and presets.
-- The MVP will remain local-first. No required backend is assumed for the first release. Pro entitlement should be implemented through a dedicated entitlement module so the source of truth can change later without rewriting product logic.
+- The MVP will remain local-first for free sending. Pro entitlement should be implemented through a dedicated entitlement module so the source of truth can change later without rewriting product logic.
 - Entitlement checks should be declarative and capability-based. The rest of the app should ask whether a capability is enabled instead of directly checking plan names.
+- Google sign-in should be introduced as the account identity layer for paid features. The extension should use Chrome MV3 `identity` support with Google OAuth scopes `openid`, `email`, and `profile`.
+- The extension should treat Google `sub` as the durable user identifier. Email should be used for display and communication, not as the primary key.
+- Sign-in alone should not unlock Pro. The extension should exchange identity with an entitlement source and receive a plan plus a capability list.
+- The first implementation may ship with a placeholder or local entitlement source for development, but product logic should assume a future remote entitlement service.
 - The import system should be refactored into a shared import orchestration module that normalizes sources, resolves notebook targets, applies dedupe rules, executes imports, and writes history records.
 - Source normalization should produce a canonical identity used across batch import, dedupe, and history. The identity should use source-specific keys when possible, including arXiv paper ID and YouTube video ID, with canonical URL fallback for general pages.
 - Batch import should accept a list of candidate sources from multiple entry points, validate them, normalize them, deduplicate within the batch, then import sequentially with per-item result reporting.
@@ -85,6 +92,8 @@ This release should make the product feel meaningfully more powerful for frequen
 - Presets should represent reusable workflow intents rather than raw UI strings alone. Each preset should contain a stable identifier, label, description, and associated prompt configuration or enhancer setting overrides.
 - Presets should be available in the popup first. Inline launcher integration may reuse the same module but can be simplified in the first release if interaction density becomes a UI constraint.
 - Free users attempting a Pro-only action should see a clear upgrade state, including what the feature does and why it is part of Pro.
+- Signed-out users attempting a Pro-only action should be prompted to sign in with Google first, then continue to upgrade or activate Pro.
+- Signed-in Free users attempting a Pro-only action should see that their account is recognized but does not yet have an active Pro entitlement.
 - The product should not gate the current single-page sending capability, context menu basic sending, or existing quick import flows behind Pro.
 - The current settings model for chat, slide deck, and infographic preferences should remain compatible. Presets should layer on top of those settings rather than replace them outright.
 - The UI should introduce plan-aware surfaces in the popup and options experiences. These surfaces should show which capabilities are available, which are locked, and how a locked action can be upgraded.
@@ -95,6 +104,8 @@ This release should make the product feel meaningfully more powerful for frequen
 - Good tests should verify user-visible behavior and durable business rules, not internal implementation details.
 - The most important behavior to test is import decision making: source normalization, batch dedupe, route selection, history writing, and entitlement gating.
 - The entitlement module should have behavior tests for enabled and disabled capabilities, including locked-action responses.
+- The auth module should have behavior tests for signed-out, signed-in, token-fetch failure, and sign-out cleanup behavior.
+- The session layer should have behavior tests ensuring plan and capability state are restored correctly after extension reload.
 - The source normalization module should have behavior tests covering general web pages, arXiv `abs` and `pdf` forms, YouTube watch and short-link forms, and canonical URL fallback behavior.
 - The routing engine should have behavior tests covering rule matching precedence, fallback behavior, and unmatched cases.
 - The batch import orchestrator should have behavior tests for mixed valid and invalid inputs, duplicate skipping, partial failures, and history persistence.
@@ -119,6 +130,7 @@ This release should make the product feel meaningfully more powerful for frequen
 
 - The recommended pricing model for this MVP is Free plus Pro lifetime purchase, with later room for a subscription tier only if cloud-backed capabilities are introduced.
 - The paid boundary should feel fair: Free solves single-source capture, while Pro sells time savings for repeated, professional use.
+- A practical rollout path is to ship identity before billing: Google login first, entitlement service second, payment checkout third.
 - The first release should optimize for a credible and understandable upgrade story rather than maximum feature breadth.
 - A good rollout path is:
   1. internal implementation of shared import orchestration

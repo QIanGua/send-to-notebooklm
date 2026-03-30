@@ -1,3 +1,6 @@
+import { getSiteAdapter } from '@/lib/site-adapters';
+import { createEmptyPageContext, enrichPageContextWithSite } from '@/lib/page-context';
+
 export default defineBackground(() => {
   const NOTEBOOKLM_ORIGIN = 'https://notebooklm.google.com';
   const STORAGE_KEYS = {
@@ -102,6 +105,12 @@ export default defineBackground(() => {
         await browser.storage.local.set({ [STORAGE_KEYS.selectedNotebookId]: notebookId });
         return { ok: true, notebookId, notebookUrl: `${NOTEBOOKLM_ORIGIN}/notebook/${notebookId}` };
       }
+      case 'fetch-bilibili-playlist-links': {
+        if (!message.url || typeof message.url !== 'string') {
+          throw new Error('No Bilibili URL provided.');
+        }
+        return { ok: true, links: await fetchBilibiliPlaylistLinks(message.url) };
+      }
       case 'open-notebooklm':
         browser.tabs.create({ url: NOTEBOOKLM_ORIGIN });
         return { ok: true };
@@ -111,24 +120,23 @@ export default defineBackground(() => {
   }
 
   async function getPageContext(tabId: number | undefined, senderTab: any) {
-    const fallback = {
-      title: senderTab?.title || '',
-      url: senderTab?.url || '',
-      canonicalUrl: senderTab?.url || '',
-      description: '',
-      selectedText: '',
-      byline: '',
-      site: null,
-      arxiv: null,
-      youtube: null,
-    };
+    const url = senderTab?.url || '';
+    const adapter = url ? getSiteAdapter(new URL(url)) : null;
+    const site = adapter ? adapter.collect(new URL(url)) : null;
+    
+    const fallback = enrichPageContextWithSite(
+      createEmptyPageContext(url, senderTab?.title),
+      site
+    );
 
-    if (!tabId) {
+    if (!tabId || (url.startsWith('chrome://') || url.startsWith('about:'))) {
       return { ok: true, page: fallback };
     }
 
     try {
       const response = await browser.tabs.sendMessage(tabId, { type: 'collect-page-context' });
+      // If content script returns context, merge it with our detected site info
+      // but prefer content script's detailed DOM data if available.
       return { ok: true, page: { ...fallback, ...(response || {}) } };
     } catch (error) {
       console.warn('[STN-Background] Could not communicate with content script:', error);
@@ -287,6 +295,68 @@ export default defineBackground(() => {
 
     const html = await response.text();
     return extractLinksFromHtml(parsedUrl, html);
+  }
+
+  async function fetchBilibiliPlaylistLinks(sourceUrl: string) {
+    const url = new URL(sourceUrl);
+    const midMatch = url.pathname.match(/\/(\d+)\/lists\//);
+    const idMatch = url.pathname.match(/\/lists\/(\d+)/);
+    const type = url.searchParams.get('type') || 'season';
+
+    if (!midMatch || !idMatch) {
+      throw new Error('Invalid Bilibili playlist URL. Expected space.bilibili.com/{mid}/lists/{id}');
+    }
+
+    const mid = midMatch[1];
+    const playlistId = idMatch[1];
+    const allLinks: string[] = [];
+    let pageNum = 1;
+    let hasMore = true;
+
+    while (hasMore && allLinks.length < 500) {
+      const apiUrl = type === 'season'
+        ? `https://api.bilibili.com/x/polymer/web-space/seasons_archives_list?mid=${mid}&season_id=${playlistId}&page_num=${pageNum}&page_size=30`
+        : `https://api.bilibili.com/x/polymer/web-space/home/seasons_series/archives?mid=${mid}&series_id=${playlistId}&page_num=${pageNum}&page_size=30`;
+
+      const response = await fetch(apiUrl, {
+        headers: {
+          'Referer': sourceUrl,
+          'User-Agent': navigator.userAgent
+        },
+        credentials: 'omit'
+      });
+
+      if (!response.ok) {
+        throw new Error(`Bilibili API failed: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      if (data.code !== 0) {
+        throw new Error(`Bilibili API error: ${data.message || 'Unknown error'}`);
+      }
+
+      const archives = data.data?.archives || [];
+      if (archives.length === 0) {
+        hasMore = false;
+      } else {
+        archives.forEach((archive: any) => {
+          if (archive.bvid) {
+            allLinks.push(`https://www.bilibili.com/video/${archive.bvid}`);
+          }
+        });
+        
+        const page = data.data?.page;
+        if (page && page.page_num * page.page_size >= page.total) {
+          hasMore = false;
+        } else if (!page) {
+          hasMore = false;
+        } else {
+          pageNum++;
+        }
+      }
+    }
+
+    return allLinks;
   }
 
   async function addSourcesToNotebook(notebookId: string, urls: string[]) {

@@ -136,6 +136,74 @@ export const siteAdapters: SiteAdapter[] = [
       marginLeft: '8px',
     },
   },
+  {
+    id: 'pdf',
+    displayName: 'PDF',
+    contentScriptMatches: ['*://*/*.pdf', '*://*/*.pdf?*', '*://*/*.PDF', '*://*/*.PDF?*'],
+    supports(url) {
+      return url.pathname.toLowerCase().endsWith('.pdf');
+    },
+    collect(url) {
+      const fileName = url.pathname.split('/').pop() || 'document.pdf';
+      return {
+        id: 'pdf',
+        displayName: 'PDF Document',
+        pageType: 'pdf',
+        itemId: fileName,
+        sourceKind: 'pdf',
+        sourceUrl: url.toString(),
+      };
+    },
+    canMount() {
+      // Typically we don't mount on generic PDF pages because they are rendered by the browser's internal viewer
+      // where content scripts have limited access. The Popup is the primary way to send these.
+      return false;
+    },
+    findMountAnchor() {
+      return null;
+    },
+    insertPosition: 'after',
+    initialMountDelayMs: 500,
+    remountDelayMs: 300,
+  },
+  {
+    id: 'bilibili',
+    displayName: 'Bilibili',
+    contentScriptMatches: ['*://*.bilibili.com/video/*', '*://*.bilibili.com/bangumi/play/*'],
+    supports(url) {
+      return url.hostname === 'www.bilibili.com' || url.hostname === 'bilibili.com';
+    },
+    collect(url) {
+      const videoMatch = url.pathname.match(/\/video\/(BV[a-zA-Z0-9]+)/);
+      if (videoMatch) {
+        return {
+          id: 'bilibili',
+          displayName: 'Bilibili',
+          pageType: 'video',
+          itemId: videoMatch[1],
+          sourceKind: 'video',
+          sourceUrl: `https://www.bilibili.com/video/${videoMatch[1]}`,
+        };
+      }
+      return {
+        id: 'bilibili',
+        displayName: 'Bilibili',
+        pageType: 'other',
+        sourceKind: 'url',
+        sourceUrl: '',
+      };
+    },
+    canMount(page) {
+      return page.site?.id === 'bilibili' && page.site.pageType === 'video';
+    },
+    findMountAnchor() {
+      // Common area for action buttons on Bilibili video page
+      return document.querySelector('.video-toolbar-left') || document.querySelector('.toolbar-left');
+    },
+    insertPosition: 'after',
+    initialMountDelayMs: 800,
+    remountDelayMs: 500,
+  },
 ];
 
 export const contentScriptMatches = Array.from(

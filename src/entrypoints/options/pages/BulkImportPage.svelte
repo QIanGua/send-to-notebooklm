@@ -1,5 +1,7 @@
 <script lang="ts">
   import type { NotebookSummary } from '@/lib/notebooks';
+  import type { AuthSession } from '@/lib/auth';
+  import type { Capability } from '@/lib/entitlements';
   import type { StatusTone, TabCandidate } from '../types';
 
   export let notebooks: NotebookSummary[] = [];
@@ -8,8 +10,16 @@
   export let selectedNotebookId = '';
   export let creatingNotebook = false;
 
-  export let bulkImportModes: Array<{ id: string; label: string; badge?: string }> = [];
+  export let bulkImportModes: Array<{ id: string; label: string; badge?: string; capability?: Capability }> = [];
   export let bulkImportMode = 'links';
+  export let selectedImportMode: { id: string; label: string; badge?: string; capability?: Capability } = {
+    id: 'links',
+    label: 'Links',
+  };
+  export let selectedImportModeLocked = false;
+  export let authSession: AuthSession | null = null;
+  export let authLoading = false;
+  export let authConfigured = true;
   export let bulkImportInput = '';
   export let parsedLinks: string[] = [];
   export let validLinks: string[] = [];
@@ -34,6 +44,7 @@
 
   export let onCreateNotebook: () => void | Promise<void>;
   export let onBulkImport: () => void | Promise<void>;
+  export let onGoogleSignIn: () => void | Promise<void>;
   export let onSelectBulkImportMode: (modeId: string) => void | Promise<void>;
   export let onLoadNotebooks: () => void | Promise<void>;
   export let onLoadBrowserTabs: () => void | Promise<void>;
@@ -41,6 +52,11 @@
   export let onSelectAllVisibleBrowserTabs: () => void | Promise<void>;
   export let onSelectCurrentBrowserTab: () => void | Promise<void>;
   export let onFetchPageLinks: () => void | Promise<void>;
+  export let bilibiliPlaylistUrl = '';
+  export let bilibiliLinks: string[] = [];
+  export let bilibiliLoading = false;
+  export let bilibiliError = '';
+  export let onFetchBilibiliPlaylistLinks: () => void | Promise<void>;
 </script>
 
 <header class="mb-8 border-b border-[#ebe5df] pb-5">
@@ -98,7 +114,7 @@
         <p class="text-xs font-medium uppercase tracking-[0.14em] text-[#8e8882]">MVP: links first</p>
       </div>
 
-      <div class="grid gap-2 rounded-2xl bg-[#f5f1eb] p-2 md:grid-cols-5">
+      <div class="grid gap-2 rounded-2xl bg-[#f5f1eb] p-2 md:grid-cols-3 lg:grid-cols-6">
         {#each bulkImportModes as mode}
           <button
             on:click={() => onSelectBulkImportMode(mode.id)}
@@ -114,7 +130,38 @@
         {/each}
       </div>
 
-      {#if bulkImportMode === 'links'}
+      {#if selectedImportModeLocked}
+        <div class="mt-4 rounded-2xl border border-[#eadfd2] bg-[#fff8f1] p-5">
+          <div class="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h4 class="text-sm font-semibold text-[#2a241f]">{selectedImportMode.label} is a Pro workflow</h4>
+              <p class="mt-1 text-sm text-[#6d655e]">
+                {#if authSession}
+                  Your Google account is connected, but this workspace does not have an active Pro entitlement yet.
+                {:else}
+                  Sign in with Google first so we can attach Pro billing and entitlements to your account.
+                {/if}
+              </p>
+            </div>
+            {#if !authSession}
+              <button
+                on:click={onGoogleSignIn}
+                disabled={authLoading || !authConfigured}
+                class="rounded-2xl bg-[#2f2924] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#17120d] disabled:bg-[#b7aea4]"
+              >
+                {authLoading ? 'Signing in…' : authConfigured ? 'Sign In with Google' : 'Google Login Unavailable'}
+              </button>
+            {/if}
+          </div>
+          <p class={`mt-4 text-sm ${authConfigured ? 'text-[#8b6b4c]' : 'text-[#8b3a2b]'}`}>
+            {#if authConfigured}
+              Pro unlocks batch import, dedupe, routing, import history, and presets. Free single-source sending stays unchanged.
+            {:else}
+              This build is missing a Google OAuth client ID. Configure `WXT_GOOGLE_OAUTH_CLIENT_ID`, rebuild, and reload the extension before testing Pro sign-in.
+            {/if}
+          </p>
+        </div>
+      {:else if bulkImportMode === 'links'}
         <div class="mt-4 rounded-2xl border border-[#e5ddd5] bg-[#fcfaf7] p-5">
           <label for="bulk-import-links" class="mb-3 block text-sm font-semibold text-[#2a241f]">Enter links (one per line)</label>
           <textarea
@@ -303,6 +350,64 @@
               class="rounded-2xl bg-[#2f2924] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#17120d] disabled:cursor-not-allowed disabled:bg-[#b7aea4]"
             >
               {bulkImporting ? 'Importing…' : 'Import Links'}
+            </button>
+          </div>
+        </div>
+      {:else if bulkImportMode === 'bilibili-playlist'}
+        <div class="mt-4 rounded-2xl border border-[#e5ddd5] bg-[#fcfaf7] p-5">
+          <div class="mb-4 flex items-center justify-between gap-4">
+            <div>
+              <h4 class="text-sm font-semibold text-[#2a241f]">Bilibili Playlist Import</h4>
+              <p class="mt-1 text-sm text-[#6d655e]">Enter a Bilibili Space List URL (Season/Series) to extract all video links.</p>
+            </div>
+            <button
+              on:click={onFetchBilibiliPlaylistLinks}
+              disabled={!bilibiliPlaylistUrl || bilibiliLoading}
+              class="rounded-2xl border border-[#ddd6ce] px-4 py-2 text-sm font-medium text-[#2a241f] transition hover:bg-white disabled:bg-[#f5f1eb]"
+            >
+              {bilibiliLoading ? 'Scanning…' : 'Scan Playlist'}
+            </button>
+          </div>
+
+          <label class="block">
+            <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-[#8e8882]">Playlist URL</span>
+            <input
+              type="text"
+              bind:value={bilibiliPlaylistUrl}
+              placeholder="https://space.bilibili.com/401005433/lists/864780?type=season"
+              class="w-full rounded-2xl border border-[#ddd6ce] bg-white px-4 py-3 text-sm text-[#17120d] outline-none transition focus:border-[#c2b4a5]"
+            />
+          </label>
+
+          {#if bilibiliError}
+            <p class="mt-4 text-sm text-[#8b3a2b]">{bilibiliError}</p>
+          {/if}
+
+          {#if bilibiliLinks.length > 0}
+            <div class="mt-4 space-y-2 rounded-2xl border border-[#e5ddd5] bg-white p-3">
+              <p class="px-1 text-xs font-medium text-[#8e8882]">Discovered {bilibiliLinks.length} videos:</p>
+              {#each bilibiliLinks.slice(0, 5) as link}
+                <div class="truncate rounded-2xl border border-[#efe7de] bg-[#fcfaf7] px-4 py-2 text-xs text-[#2a241f]">
+                  {link}
+                </div>
+              {/each}
+              {#if bilibiliLinks.length > 5}
+                <p class="px-1 text-center text-xs text-[#6d655e]">... and {bilibiliLinks.length - 5} more</p>
+              {/if}
+            </div>
+          {/if}
+
+          <div class="mt-4 flex flex-wrap items-center justify-between gap-4">
+            <div class="flex flex-wrap gap-2 text-sm text-[#6d655e]">
+              <span class="rounded-full bg-white px-3 py-1">Ready to import: {bilibiliLinks.length}</span>
+            </div>
+
+            <button
+              on:click={onBulkImport}
+              disabled={!selectedNotebookId || bilibiliLinks.length === 0 || bulkImporting}
+              class="rounded-2xl bg-[#2f2924] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#17120d] disabled:cursor-not-allowed disabled:bg-[#b7aea4]"
+            >
+              {bulkImporting ? 'Importing…' : 'Import Bilibili Videos'}
             </button>
           </div>
         </div>
