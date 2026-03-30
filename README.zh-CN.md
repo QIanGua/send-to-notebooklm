@@ -59,4 +59,12 @@ bun run dev
 bun run build
 ```
 
+## 🚀 独立运行 (Standalone)
+
+此版本的 Send to NotebookLM 是完全独立的。它不需要后端服务器或 Google OAuth 配置。
+
+- **全功能解锁**: 默认即可访问所有功能（包括原 Pro 功能）。
+- **零外部依赖**: 无需授权服务器，无需复杂的环境变量配置。
+- **直接集成**: 通过 Web API 直接与 NotebookLM 通信（需要您在浏览器中登录 NotebookLM 网站）。
+
 

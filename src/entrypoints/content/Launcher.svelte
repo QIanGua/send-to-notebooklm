@@ -16,10 +16,11 @@
   let storageListener: ((changes: Record<string, { newValue?: unknown }>, areaName: string) => void) | null = null;
 
   $: sourceUrl = getPreferredSourceUrl(page);
+  $: isPlaylist = page?.site?.pageType === 'playlist';
   $: currentSourceLabel = page?.site?.sourceKind === 'pdf'
     ? $t('type_pdf')
     : page?.site?.sourceKind === 'video'
-      ? $t('type_video')
+      ? isPlaylist ? $t('type_playlist') : $t('type_video')
       : $t('type_notebook');
   $: siteLabel = page?.site?.displayName || (host === 'arxiv' ? 'arXiv' : host === 'youtube' ? 'YouTube' : $t('type_notebook'));
   $: showOpenNotebookButton = status.tone === 'error';
@@ -79,20 +80,36 @@
     existingOpen = !existingOpen;
     if (existingOpen) await loadNotebooks();
   }
+  
+  async function getUrlsToImport(): Promise<string[]> {
+    if (!isPlaylist) return [sourceUrl];
+    
+    setStatus($t("status_fetching_playlist"));
+    const response: any = await browser.runtime.sendMessage({ 
+      type: "fetch-bilibili-playlist-links", 
+      url: sourceUrl 
+    });
+    
+    if (!response.ok) throw new Error(response.error || "Failed to fetch playlist links");
+    return response.links || [];
+  }
 
   async function createAndSend() {
     setStatus(
       page?.site?.sourceKind === 'pdf'
         ? $t('status_importing_arxiv')
         : page?.site?.sourceKind === 'video'
-          ? $t('status_importing_youtube')
+          ? isPlaylist ? $t('status_fetching_playlist') : $t('status_importing_youtube')
           : $t('status_importing_source'),
     );
     isBusy = true;
     try {
+      const urls = await getUrlsToImport();
+      if (urls.length === 0) throw new Error("No videos found in this playlist.");
+      
       const response: any = await browser.runtime.sendMessage({
         type: "create-notebook-and-send",
-        urls: [sourceUrl]
+        urls: urls
       });
       if (!response.ok) throw new Error(response.error || $t("status_create_failed"));
       setStatus($t("status_imported_opening"), "success");
@@ -113,15 +130,18 @@
       page?.site?.sourceKind === 'pdf'
         ? $t('status_adding_arxiv')
         : page?.site?.sourceKind === 'video'
-          ? $t('status_adding_youtube')
+          ? isPlaylist ? $t('status_fetching_playlist') : $t('status_adding_youtube')
           : $t('status_adding_source'),
     );
     isBusy = true;
     try {
+      const urls = await getUrlsToImport();
+      if (urls.length === 0) throw new Error("No videos found in this playlist.");
+
       const response: any = await browser.runtime.sendMessage({
         type: "send-to-notebook",
         notebookId: selectedNotebookId,
-        urls: [sourceUrl]
+        urls: urls
       });
       if (!response.ok) throw new Error(response.error || $t("status_send_failed"));
       setStatus($t("status_added_opening"), "success");

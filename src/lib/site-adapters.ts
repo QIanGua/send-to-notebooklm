@@ -168,41 +168,82 @@ export const siteAdapters: SiteAdapter[] = [
   },
   {
     id: 'bilibili',
-    displayName: 'Bilibili',
-    contentScriptMatches: ['*://*.bilibili.com/video/*', '*://*.bilibili.com/bangumi/play/*'],
+    displayName: 'B站',
+    contentScriptMatches: [
+      '*://*.bilibili.com/video/*',
+      '*://*.bilibili.com/bangumi/play/*',
+      '*://space.bilibili.com/*/lists/*',
+    ],
     supports(url) {
-      return url.hostname === 'www.bilibili.com' || url.hostname === 'bilibili.com';
+      return url.hostname.includes('bilibili.com');
     },
     collect(url) {
       const videoMatch = url.pathname.match(/\/video\/(BV[a-zA-Z0-9]+)/);
       if (videoMatch) {
         return {
           id: 'bilibili',
-          displayName: 'Bilibili',
+          displayName: 'B站',
           pageType: 'video',
           itemId: videoMatch[1],
           sourceKind: 'video',
           sourceUrl: `https://www.bilibili.com/video/${videoMatch[1]}`,
         };
       }
+      
+      if (url.pathname.includes('/bangumi/play/')) {
+        return {
+          id: 'bilibili',
+          displayName: 'B站 番剧',
+          pageType: 'video',
+          itemId: url.pathname.split('/').pop() || 'bangumi',
+          sourceKind: 'video',
+          sourceUrl: url.toString(),
+        };
+      }
+
+      const listMatch = url.pathname.match(/\/(\d+)\/lists\/(\d+)/);
+      if (listMatch) {
+        return {
+          id: 'bilibili',
+          displayName: 'B站 合集',
+          pageType: 'playlist',
+          itemId: listMatch[2],
+          sourceKind: 'video',
+          sourceUrl: url.toString(),
+        };
+      }
+
       return {
         id: 'bilibili',
-        displayName: 'Bilibili',
+        displayName: 'B站',
         pageType: 'other',
         sourceKind: 'url',
         sourceUrl: '',
       };
     },
     canMount(page) {
-      return page.site?.id === 'bilibili' && page.site.pageType === 'video';
+      return page.site?.id === 'bilibili' && (page.site.pageType === 'video' || page.site.pageType === 'playlist');
     },
     findMountAnchor() {
-      // Common area for action buttons on Bilibili video page
-      return document.querySelector('.video-toolbar-left') || document.querySelector('.toolbar-left');
+      return (
+        document.querySelector('#arc_toolbar_report .toolbar-left') ||
+        document.querySelector('.video-toolbar-left') ||
+        document.querySelector('.toolbar-left') ||
+        document.querySelector('.video-toolbar .ops') ||
+        document.querySelector('.video-info-detail-list') ||
+        document.querySelector('.list-video-info') ||
+        document.querySelector('.breadcrumb')
+      );
     },
     insertPosition: 'after',
-    initialMountDelayMs: 800,
-    remountDelayMs: 500,
+    initialMountDelayMs: 1200,
+    remountDelayMs: 600,
+    hostStyle: {
+      display: 'inline-flex',
+      alignItems: 'center',
+      marginLeft: '8px',
+      verticalAlign: 'middle',
+    },
   },
 ];
 

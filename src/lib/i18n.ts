@@ -59,6 +59,7 @@ export const translations: Record<Language, Record<string, string>> = {
     "status_add_success_arxiv": "PDF 已添加。正在打开笔记本…",
     "status_add_success_youtube": "视频已添加。正在打开笔记本…",
     "status_add_success_source": "来源已添加。正在打开笔记本…",
+    "status_fetching_playlist": "正在解析 B站合集视频列表...",
     "desc_arxiv": "检测到 arXiv 论文。PDF 源码 {url} 将导入新建的 NotebookLM 笔记本。",
     "desc_youtube": "检测到 YouTube 视频。视频 URL {url} 将导入 NotebookLM。",
     "desc_site_source": "检测到 {site} 来源。{url} 将导入 NotebookLM。",
@@ -74,6 +75,7 @@ export const translations: Record<Language, Record<string, string>> = {
     "btn_add_to_existing": "添加至现有笔记本",
     "type_pdf": "PDF",
     "type_video": "视频",
+    "type_playlist": "合集",
     "type_notebook": "笔记",
     "status_imported_opening": "已导入。正在打开笔记本…",
     "status_added_opening": "已添加。正在打开笔记本…"
@@ -134,6 +136,7 @@ export const translations: Record<Language, Record<string, string>> = {
     "status_add_success_arxiv": "PDF added. Opening notebook…",
     "status_add_success_youtube": "Video added. Opening notebook…",
     "status_add_success_source": "Source added. Opening notebook…",
+    "status_fetching_playlist": "Fetching Bilibili playlist videos...",
     "desc_arxiv": "Detected arXiv paper. The PDF source {url} will be imported into a newly created NotebookLM notebook.",
     "desc_youtube": "Detected YouTube video. The video URL {url} will be imported into NotebookLM.",
     "desc_site_source": "Detected a {site} source. {url} will be imported into NotebookLM.",
@@ -149,6 +152,7 @@ export const translations: Record<Language, Record<string, string>> = {
     "btn_add_to_existing": "Add to Existing",
     "type_pdf": "PDF",
     "type_video": "video",
+    "type_playlist": "playlist",
     "type_notebook": "notebook",
     "status_imported_opening": "Imported. Opening notebook…",
     "status_added_opening": "Added. Opening notebook…"
