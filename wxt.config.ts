@@ -8,7 +8,7 @@ export default defineConfig({
   manifest: {
     name: 'Send to NotebookLM',
     description: 'One-click capture for web pages, arXiv PDFs, and YouTube videos to NotebookLM.',
-    version: '3.0.0',
+    version: '3.0.1',
     permissions: ['storage', 'contextMenus', 'tabs'],
     host_permissions: [
       'https://notebooklm.google.com/*',
@@ -45,7 +45,7 @@ export default defineConfig({
   vite: () => ({
     plugins: [tailwindcss()],
     server: {
-      host: '127.0.0.1',
+      host: 'localhost',
       port: 3000,
       strictPort: true,
     },
