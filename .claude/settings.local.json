@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(youmind-wechat-article)",
+      "mcp__plugin_qmd_qmd__get"
+    ]
+  }
+}

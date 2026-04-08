@@ -576,7 +576,17 @@
 
   <section class="flex-1 overflow-y-auto relative">
     <!-- Redesigned Support Button -->
-    <div class="absolute top-6 right-8 z-10">
+    <div class="absolute top-6 right-8 z-10 flex items-center gap-4">
+      <a
+        href="https://github.com/QIanGua/send-to-notebooklm"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="flex items-center gap-2 rounded-full bg-white/80 px-5 py-2.5 text-sm font-bold text-[#514b45] shadow-sm border border-[#e6ddd3] transition-all hover:bg-white hover:text-[#17120d] hover:shadow-md active:scale-95"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+        {$t('app.github_title')}
+      </a>
+
       <button
         on:click={() => (showSupportModal = true)}
         class="group relative flex items-center gap-3 rounded-full bg-gradient-to-r from-orange-500 to-orange-600 px-7 py-3.5 text-sm font-bold text-white shadow-xl shadow-orange-200 transition-all active:scale-95 hover:from-orange-600 hover:to-orange-700 hover:shadow-orange-300"
