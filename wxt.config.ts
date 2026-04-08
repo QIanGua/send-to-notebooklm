@@ -8,7 +8,7 @@ export default defineConfig({
   manifest: {
     name: 'Send to NotebookLM',
     description: 'One-click capture for web pages, arXiv PDFs, and YouTube videos to NotebookLM.',
-    version: '2.1.0',
+    version: '3.0.0',
     permissions: ['storage', 'contextMenus', 'tabs'],
     host_permissions: [
       'https://notebooklm.google.com/*',

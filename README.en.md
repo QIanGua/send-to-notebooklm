@@ -32,14 +32,24 @@ Automatically applies your preferred presets when generating artifacts:
 
 ## 📥 Installation
 
-1. Download or clone this repository.
-2. Build the extension:
+### Option A: Install from ZIP (Recommended)
+
+1. Download the extension ZIP file and extract it to a local folder.
+2. Open Chrome and navigate to `chrome://extensions/`.
+3. Enable **Developer mode** (top right).
+4. Click **Load unpacked**.
+5. Select the extracted folder (ensure it contains the `manifest.json` file).
+
+### Option B: Build from Source
+
+1. Clone or download this repository.
+2. Run build commands:
    ```bash
    bun install
    bun run build
    ```
 3. Open Chrome and navigate to `chrome://extensions/`.
-4. Enable **Developer mode** (top right).
+4. Enable **Developer mode**.
 5. Click **Load unpacked** and select the `.output/chrome-mv3` directory.
 
 ## 📖 Usage
