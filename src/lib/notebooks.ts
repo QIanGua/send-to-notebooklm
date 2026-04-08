@@ -23,12 +23,15 @@ export async function fetchNotebooks(): Promise<NotebookSummary[]> {
   return response.notebooks || [];
 }
 
-export async function createNotebook(): Promise<string> {
+export async function createNotebook(urls?: string[]): Promise<{ notebookId: string; notebookUrl?: string }> {
+  const type = urls && urls.length > 0 ? 'create-notebook-and-send' : 'create-notebook';
   const response = (await browser.runtime.sendMessage({
-    type: 'create-notebook',
+    type,
+    urls,
   })) as {
     ok?: boolean;
     notebookId?: string;
+    notebookUrl?: string;
     error?: string;
   };
 
@@ -36,5 +39,8 @@ export async function createNotebook(): Promise<string> {
     throw new Error(response?.error || 'Could not create notebook.');
   }
 
-  return response.notebookId;
+  return {
+    notebookId: response.notebookId,
+    notebookUrl: response.notebookUrl,
+  };
 }

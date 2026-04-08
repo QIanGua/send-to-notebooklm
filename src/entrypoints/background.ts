@@ -111,23 +111,62 @@ export default defineBackground(() => {
         }
         return { ok: true, links: await fetchBilibiliPlaylistLinks(message.url) };
       }
+      case 'fetch-youtube-playlist-links': {
+        if (!message.url || typeof message.url !== 'string') {
+          throw new Error('No YouTube URL provided.');
+        }
+        return { ok: true, links: await fetchYoutubePlaylistLinks(message.url) };
+      }
       case 'open-notebooklm':
         browser.tabs.create({ url: NOTEBOOKLM_ORIGIN });
         return { ok: true };
+      case 'start-background-build': {
+        const { notebookId, artifactType } = message;
+        const url = `${NOTEBOOKLM_ORIGIN}/notebook/${notebookId}#autobuild=${artifactType}&mode=worker`;
+        
+        // Open background tab
+        const tab = await browser.tabs.create({ url, active: false });
+        
+        // Tab management: we can track this tab if needed, but for now we rely on content script reporting back
+        return { ok: true };
+      }
+      case 'build-status': {
+        // Forward build status from content script to options page
+        await browser.runtime.sendMessage(message);
+        
+        // If finished, close the tab
+        if (sender.tab?.id && (message.status === 'success' || message.status === 'error')) {
+          setTimeout(() => {
+            if (sender.tab?.id) {
+              browser.tabs.remove(sender.tab.id).catch(() => {});
+            }
+          }, 3000); // 3 second delay to ensure state propagated
+        }
+        return { ok: true };
+      }
       default:
         throw new Error(`Unknown message type: ${message.type}`);
     }
   }
 
   async function getPageContext(tabId: number | undefined, senderTab: any) {
-    const url = senderTab?.url || '';
+    let url = senderTab?.url || '';
+    let title = senderTab?.title || '';
+
+    if (!url && tabId) {
+      try {
+        const tab = await browser.tabs.get(tabId);
+        url = tab.url || '';
+        title = tab.title || '';
+      } catch (e) {
+        console.warn('[STN-Background] Could not get tab info for context:', e);
+      }
+    }
+
     const adapter = url ? getSiteAdapter(new URL(url)) : null;
     const site = adapter ? adapter.collect(new URL(url)) : null;
-    
-    const fallback = enrichPageContextWithSite(
-      createEmptyPageContext(url, senderTab?.title),
-      site
-    );
+
+    const fallback = enrichPageContextWithSite(createEmptyPageContext(url, title), site);
 
     if (!tabId || (url.startsWith('chrome://') || url.startsWith('about:'))) {
       return { ok: true, page: fallback };
@@ -313,7 +352,7 @@ export default defineBackground(() => {
     let pageNum = 1;
     let hasMore = true;
 
-    while (hasMore && allLinks.length < 500) {
+    while (hasMore && allLinks.length < 50) {
       const apiUrl = type === 'season'
         ? `https://api.bilibili.com/x/polymer/web-space/seasons_archives_list?mid=${mid}&season_id=${playlistId}&page_num=${pageNum}&page_size=30`
         : `https://api.bilibili.com/x/polymer/web-space/home/seasons_series/archives?mid=${mid}&series_id=${playlistId}&page_num=${pageNum}&page_size=30`;
@@ -357,6 +396,45 @@ export default defineBackground(() => {
     }
 
     return allLinks;
+  }
+
+  async function fetchYoutubePlaylistLinks(sourceUrl: string) {
+    const response = await fetch(sourceUrl, {
+      credentials: 'omit',
+    });
+    if (!response.ok) throw new Error('Failed to fetch YouTube playlist content.');
+
+    const html = await response.text();
+    // YouTube embeds video IDs in several places in the page HTML
+    const videoIdPattern = /"videoId":"([a-zA-Z0-9_-]{11})"/g;
+    const seen = new Set<string>();
+    const links: string[] = [];
+
+    for (const match of html.matchAll(videoIdPattern)) {
+      if (links.length >= 50) break;
+      const videoId = match[1];
+      const url = `https://www.youtube.com/watch?v=${videoId}`;
+      if (!seen.has(url)) {
+        seen.add(url);
+        links.push(url);
+      }
+    }
+
+    if (links.length === 0) {
+      // Fallback: try watch?v= pattern
+      const watchPattern = /\/watch\?v=([a-zA-Z0-9_-]{11})/g;
+      for (const match of html.matchAll(watchPattern)) {
+        if (links.length >= 50) break;
+        const videoId = match[1];
+        const url = `https://www.youtube.com/watch?v=${videoId}`;
+        if (!seen.has(url)) {
+          seen.add(url);
+          links.push(url);
+        }
+      }
+    }
+
+    return links;
   }
 
   async function addSourcesToNotebook(notebookId: string, urls: string[]) {

@@ -1,10 +1,12 @@
 export type ActiveTab =
   | 'bulk-import'
   | 'notebooks'
-  | 'podcasts'
   | 'chat'
   | 'slide'
-  | 'infographic';
+  | 'infographic'
+  | 'report'
+  | 'video'
+  | 'settings';
 
 export type StatusTone = 'neutral' | 'success' | 'error';
 

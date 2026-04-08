@@ -1,8 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { locale, t, type Language } from '@/lib/i18n';
+  import { language, t, type Language } from '@/lib/i18n';
   import { getPreferredSourceUrl, isQuickImportPage } from '@/lib/page-context';
   import { browser } from 'wxt/browser';
+  import SupportModal from '@/lib/components/SupportModal.svelte';
 
   // --- State ---
   let page: any = null;
@@ -13,6 +14,7 @@
   let showSettings = false;
   let status = { text: "", tone: "" };
   let isBusy = false;
+  let showSupportModal = false;
 
   // --- Computed ---
   $: localizedStatus = status.text;
@@ -41,7 +43,7 @@
   // --- Actions ---
   onMount(async () => {
     const saved = await browser.storage.local.get(["language", "selectedNotebookId"]);
-    if (saved.language) $locale = saved.language as Language;
+    if (saved.language) language.set(saved.language as Language);
     selectedNotebookId = (saved.selectedNotebookId as string) || "";
     
     setStatus($t("status_loading"));
@@ -201,7 +203,7 @@
   async function changeLanguage(e: Event) {
     const target = e.target as HTMLSelectElement;
     const lang = target.value as Language;
-    $locale = lang;
+    language.set(lang);
     await browser.storage.local.set({ language: lang });
   }
 
@@ -424,8 +426,19 @@
     </div>
   </div>
 
-  <!-- Status Bar -->
-  <footer class="mt-auto pt-4 flex items-center justify-center border-t border-stone-200/40">
+  <!-- Status Bar & Sponsors -->
+  <footer class="mt-auto pt-4 flex flex-col items-center gap-3 border-t border-stone-200/40">
+    <div class="flex items-center gap-4">
+      <button 
+        on:click={() => (showSupportModal = true)}
+        title={$t('support.title')}
+        class="group relative flex items-center justify-center p-2.5 rounded-full transition-all active:scale-95"
+      >
+        <div class="absolute inset-0 rounded-full bg-orange-400/20 animate-ping group-hover:bg-orange-400/30"></div>
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" class="relative z-10 text-orange-500 transition-transform group-hover:scale-110 group-hover:text-orange-600"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+      </button>
+    </div>
+
     <div class="flex items-center gap-2 px-3 py-1 rounded-full bg-stone-50 border border-stone-100 shadow-sm">
       {#if isBusy}
         <div class="flex space-x-1">
@@ -442,6 +455,8 @@
     </div>
   </footer>
 </main>
+
+<SupportModal bind:show={showSupportModal} onClose={() => (showSupportModal = false)} />
 
 <style>
   :global(body) {

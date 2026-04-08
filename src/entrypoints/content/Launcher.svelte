@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { locale, t, type Language } from '@/lib/i18n';
+  import { language, t, type Language } from '@/lib/i18n';
   import { getPreferredSourceUrl, isQuickImportPage } from '@/lib/page-context';
   import { browser } from 'wxt/browser';
 
@@ -28,7 +28,7 @@
   onMount(() => {
     void (async () => {
       const saved = await browser.storage.local.get(["language", "selectedNotebookId"]);
-      if (saved.language) $locale = saved.language as Language;
+      if (saved.language) language.set(saved.language as Language);
       selectedNotebookId = (saved.selectedNotebookId as string) || "";
     })();
 
@@ -36,7 +36,7 @@
       if (areaName !== "local") return;
 
       if (changes.language?.newValue) {
-        $locale = changes.language.newValue as Language;
+        language.set(changes.language.newValue as Language);
       }
 
       if (typeof changes.selectedNotebookId?.newValue === "string") {

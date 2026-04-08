@@ -24,15 +24,22 @@ export default defineContentScript({
         removeExistingLauncher();
       }
 
-      if (urlChanged || !document.querySelector('stn-inline-launcher')) {
+      const hasLauncher = !!document.querySelector('stn-inline-launcher');
+      if (urlChanged || !hasLauncher) {
         const adapter = getSiteAdapter(new URL(currentUrl));
-        scheduleMount(adapter?.remountDelayMs ?? 300);
+        if (adapter) {
+          // If we found the anchor, we can mount much faster (50ms vs 300ms)
+          const anchor = adapter.findMountAnchor();
+          const delay = (anchor && !urlChanged) ? 50 : (adapter.remountDelayMs ?? 300);
+          scheduleMount(delay);
+        }
       }
     });
 
     const scheduleMount = (delay: number) => {
       if (mountTimer) clearTimeout(mountTimer);
       mountTimer = setTimeout(() => {
+        mountTimer = null;
         void mountLaunchers(ctx);
       }, delay);
     };
@@ -71,7 +78,7 @@ async function mountLaunchers(ctx: any, retryCount = 0) {
   if (!anchor) {
     // If we're on a page that should have a launcher but anchor isn't found, retry a few times
     if (retryCount < 10) {
-      setTimeout(() => void mountLaunchers(ctx, retryCount + 1), 500);
+      setTimeout(() => void mountLaunchers(ctx, retryCount + 1), 200);
     }
     return;
   }

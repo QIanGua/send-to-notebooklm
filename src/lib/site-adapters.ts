@@ -74,8 +74,8 @@ export const siteAdapters: SiteAdapter[] = [
       return document.querySelector('a[href*="/pdf/"]');
     },
     insertPosition: 'after',
-    initialMountDelayMs: 500,
-    remountDelayMs: 250,
+    initialMountDelayMs: 200,
+    remountDelayMs: 100,
   },
   {
     id: 'youtube',
@@ -128,8 +128,8 @@ export const siteAdapters: SiteAdapter[] = [
       return document.querySelector(YOUTUBE_ACTION_SELECTORS);
     },
     insertPosition: 'last',
-    initialMountDelayMs: 500,
-    remountDelayMs: 300,
+    initialMountDelayMs: 200,
+    remountDelayMs: 150,
     hostStyle: {
       display: 'flex',
       alignItems: 'center',
@@ -163,8 +163,8 @@ export const siteAdapters: SiteAdapter[] = [
       return null;
     },
     insertPosition: 'after',
-    initialMountDelayMs: 500,
-    remountDelayMs: 300,
+    initialMountDelayMs: 200,
+    remountDelayMs: 150,
   },
   {
     id: 'bilibili',
@@ -236,8 +236,8 @@ export const siteAdapters: SiteAdapter[] = [
       );
     },
     insertPosition: 'after',
-    initialMountDelayMs: 1200,
-    remountDelayMs: 600,
+    initialMountDelayMs: 400,
+    remountDelayMs: 200,
     hostStyle: {
       display: 'inline-flex',
       alignItems: 'center',

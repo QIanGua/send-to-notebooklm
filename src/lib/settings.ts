@@ -1,6 +1,7 @@
 import { browser } from 'wxt/browser';
 
 export interface Settings {
+  language: 'zh' | 'en';
   chat: {
     goal: 'default' | 'learning_guide' | 'custom';
     responseLength: 'default' | 'longer' | 'shorter';
@@ -19,9 +20,18 @@ export interface Settings {
     detailLevel: 'concise' | 'standard' | 'detailed';
     customPrompt: string;
   };
+  report: {
+    language: string;
+    customPrompt: string;
+  };
+  videoOverview: {
+    format: 'cinematic' | 'explainer' | 'brief';
+    customPrompt: string;
+  };
 }
 
 export const DEFAULT_SETTINGS: Settings = {
+  language: 'zh',
   chat: { 
     goal: 'learning_guide', 
     responseLength: 'longer',
@@ -40,7 +50,16 @@ export const DEFAULT_SETTINGS: Settings = {
     detailLevel: 'standard', 
     customPrompt: '' 
   },
+  report: {
+    language: 'zh',
+    customPrompt: ''
+  },
+  videoOverview: {
+    format: 'cinematic',
+    customPrompt: ''
+  },
 };
+
 
 export async function getSettings(): Promise<Settings | null> {
   try {
@@ -51,9 +70,12 @@ export async function getSettings(): Promise<Settings | null> {
     if (!res.settings) return DEFAULT_SETTINGS;
     
     return {
+      language: res.settings.language || DEFAULT_SETTINGS.language,
       chat: { ...DEFAULT_SETTINGS.chat, ...res.settings.chat },
       slideDeck: { ...DEFAULT_SETTINGS.slideDeck, ...res.settings.slideDeck },
       infographic: { ...DEFAULT_SETTINGS.infographic, ...res.settings.infographic },
+      report: { ...DEFAULT_SETTINGS.report, ...res.settings.report },
+      videoOverview: { ...DEFAULT_SETTINGS.videoOverview, ...res.settings.videoOverview },
     };
   } catch (e) {
     if (String(e).includes('Extension context invalidated')) return null;
