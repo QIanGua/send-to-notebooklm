@@ -19,3 +19,9 @@ export interface TabCandidate {
   isActive: boolean;
   isCurrentWindow: boolean;
 }
+
+export interface BulkImportSource {
+  url: string;
+  title: string;
+  selected: boolean;
+}

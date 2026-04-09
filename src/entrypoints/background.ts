@@ -1,5 +1,6 @@
 import { getSiteAdapter } from '@/lib/site-adapters';
 import { createEmptyPageContext, enrichPageContextWithSite } from '@/lib/page-context';
+import md5 from 'js-md5';
 
 export default defineBackground(() => {
   const NOTEBOOKLM_ORIGIN = 'https://notebooklm.google.com';
@@ -338,31 +339,63 @@ export default defineBackground(() => {
 
   async function fetchBilibiliPlaylistLinks(sourceUrl: string) {
     const url = new URL(sourceUrl);
-    const midMatch = url.pathname.match(/\/(\d+)\/lists\//);
-    const idMatch = url.pathname.match(/\/lists\/(\d+)/);
-    const type = url.searchParams.get('type') || 'season';
+    const isPlaylist = url.pathname.includes('/lists/');
+    const isUploads = url.pathname.includes('/upload/video');
 
-    if (!midMatch || !idMatch) {
-      throw new Error('Invalid Bilibili playlist URL. Expected space.bilibili.com/{mid}/lists/{id}');
+    if (!isPlaylist && !isUploads) {
+      throw new Error('Invalid Bilibili URL. Expected space.bilibili.com/{mid}/lists/{id} or /upload/video');
+    }
+
+    const midMatch = url.pathname.match(/\/(\d+)\//);
+    if (!midMatch) {
+      throw new Error('Invalid Bilibili URL. Expected space.bilibili.com/{mid}/...');
     }
 
     const mid = midMatch[1];
-    const playlistId = idMatch[1];
-    const allLinks: string[] = [];
+    let playlistId = '';
+    let type = url.searchParams.get('type') || 'season';
+
+    if (isPlaylist) {
+      const idMatch = url.pathname.match(/\/lists\/(\d+)/);
+      if (!idMatch) {
+        throw new Error('Invalid Bilibili playlist URL. Expected space.bilibili.com/{mid}/lists/{id}');
+      }
+      playlistId = idMatch[1];
+    }
+
+    const allLinks: { url: string; title: string }[] = [];
     let pageNum = 1;
     let hasMore = true;
 
     while (hasMore && allLinks.length < 50) {
-      const apiUrl = type === 'season'
-        ? `https://api.bilibili.com/x/polymer/web-space/seasons_archives_list?mid=${mid}&season_id=${playlistId}&page_num=${pageNum}&page_size=30`
-        : `https://api.bilibili.com/x/polymer/web-space/home/seasons_series/archives?mid=${mid}&series_id=${playlistId}&page_num=${pageNum}&page_size=30`;
+      let apiUrl = '';
+      let useMedialist = false;
+      
+      if (isUploads) {
+        // Try medialist first as it's often more stable for "All Uploads"
+        const { img_key, sub_key } = await getWbiKeys();
+        const signedQuery = signBilibiliParams({
+          mid,
+          ps: 30,
+          tid: 0,
+          pn: pageNum,
+          keyword: '',
+          order: 'pubdate',
+          platform: 'web',
+          web_location: 1550101,
+        }, img_key, sub_key);
+        apiUrl = `https://api.bilibili.com/x/space/wbi/arc/search?${signedQuery}`;
+      } else {
+        apiUrl = type === 'season'
+          ? `https://api.bilibili.com/x/polymer/web-space/seasons_archives_list?mid=${mid}&season_id=${playlistId}&page_num=${pageNum}&page_size=30`
+          : `https://api.bilibili.com/x/polymer/web-space/home/seasons_series/archives?mid=${mid}&series_id=${playlistId}&page_num=${pageNum}&page_size=30`;
+      }
 
       const response = await fetch(apiUrl, {
         headers: {
-          'Referer': sourceUrl,
+          'Referer': 'https://www.bilibili.com/',
           'User-Agent': navigator.userAgent
-        },
-        credentials: 'omit'
+        }
       });
 
       if (!response.ok) {
@@ -371,23 +404,28 @@ export default defineBackground(() => {
 
       const data = await response.json();
       if (data.code !== 0) {
-        throw new Error(`Bilibili API error: ${data.message || 'Unknown error'}`);
+        throw new Error(`Bilibili API error: ${data.message || 'Unknown error'} (Code: ${data.code})`);
       }
 
-      const archives = data.data?.archives || [];
+      // Handle different formats from wbi search vs polymer
+      const archives = isUploads ? (data.data?.list?.vlist || []) : (data.data?.archives || []);
       if (archives.length === 0) {
         hasMore = false;
       } else {
         archives.forEach((archive: any) => {
           if (archive.bvid) {
-            allLinks.push(`https://www.bilibili.com/video/${archive.bvid}`);
+            allLinks.push({
+              url: `https://www.bilibili.com/video/${archive.bvid}`,
+              title: archive.title || archive.bvid,
+            });
           }
         });
         
-        const page = data.data?.page;
-        if (page && page.page_num * page.page_size >= page.total) {
-          hasMore = false;
-        } else if (!page) {
+        const total = isUploads ? (data.data?.page?.count || 0) : (data.data?.page?.total || 0);
+        const pageSize = isUploads ? (data.data?.page?.ps || 30) : (data.data?.page?.page_size || 30);
+        const currentTotal = pageNum * pageSize;
+
+        if (currentTotal >= total) {
           hasMore = false;
         } else {
           pageNum++;
@@ -398,6 +436,45 @@ export default defineBackground(() => {
     return allLinks;
   }
 
+  const mixKeyArr = [
+    46, 47, 18, 2, 53, 8, 23, 32, 15, 50, 10, 31, 58, 3, 45, 35, 27, 43, 5, 49,
+    33, 9, 42, 19, 29, 28, 14, 39, 12, 38, 41, 13, 37, 48, 7, 16, 24, 55, 40,
+    61, 26, 17, 0, 1, 60, 51, 30, 4, 22, 25, 54, 21, 56, 59, 6, 63, 57, 62, 11,
+    36, 20, 34, 44, 52,
+  ];
+
+  function getMixKey(orig: string) {
+    return mixKeyArr.map((n) => orig[n]).join('').slice(0, 32);
+  }
+
+  async function getWbiKeys() {
+    const response = await fetch('https://api.bilibili.com/x/web-interface/nav', { credentials: 'omit' });
+    const { data: { wbi_img: { img_url, sub_url } } } = await response.json();
+    return {
+      img_key: img_url.split('/').pop().split('.')[0],
+      sub_key: sub_url.split('/').pop().split('.')[0],
+    };
+  }
+
+  function signBilibiliParams(params: Record<string, any>, img_key: string, sub_key: string) {
+    const mixed_key = getMixKey(img_key + sub_key);
+    const curr_time = Math.round(Date.now() / 1000);
+    const paramsWithWts = { ...params, wts: curr_time };
+    
+    // Bilibili WBI signing: Sort, Filter, URI Encode
+    const chr_filter = /[!'()*]/g;
+    const query = Object.keys(paramsWithWts)
+      .sort()
+      .map((key) => {
+        const val = String(paramsWithWts[key]).replace(chr_filter, '');
+        return `${encodeURIComponent(key)}=${encodeURIComponent(val)}`;
+      })
+      .join('&');
+
+    const w_rid = md5(query + mixed_key);
+    return query + '&w_rid=' + w_rid;
+  }
+
   async function fetchYoutubePlaylistLinks(sourceUrl: string) {
     const response = await fetch(sourceUrl, {
       credentials: 'omit',
@@ -405,18 +482,33 @@ export default defineBackground(() => {
     if (!response.ok) throw new Error('Failed to fetch YouTube playlist content.');
 
     const html = await response.text();
-    // YouTube embeds video IDs in several places in the page HTML
-    const videoIdPattern = /"videoId":"([a-zA-Z0-9_-]{11})"/g;
+    // YouTube embeds video IDs and titles in JSON blocks (playlistVideoRenderer)
+    const videoDataPattern = /"playlistVideoRenderer":\{"videoId":"([a-zA-Z0-9_-]{11})".*?"title":\{"runs":\[\{"text":"(.*?)"\}\]/g;
     const seen = new Set<string>();
-    const links: string[] = [];
+    const links: { url: string; title: string }[] = [];
 
-    for (const match of html.matchAll(videoIdPattern)) {
+    for (const match of html.matchAll(videoDataPattern)) {
       if (links.length >= 50) break;
       const videoId = match[1];
+      const title = match[2];
       const url = `https://www.youtube.com/watch?v=${videoId}`;
       if (!seen.has(url)) {
         seen.add(url);
-        links.push(url);
+        links.push({ url, title });
+      }
+    }
+
+    if (links.length === 0) {
+      // Fallback: try simple videoId search
+      const videoIdPattern = /"videoId":"([a-zA-Z0-9_-]{11})"/g;
+      for (const match of html.matchAll(videoIdPattern)) {
+        if (links.length >= 50) break;
+        const videoId = match[1];
+        const url = `https://www.youtube.com/watch?v=${videoId}`;
+        if (!seen.has(url)) {
+          seen.add(url);
+          links.push({ url, title: url });
+        }
       }
     }
 
@@ -429,7 +521,7 @@ export default defineBackground(() => {
         const url = `https://www.youtube.com/watch?v=${videoId}`;
         if (!seen.has(url)) {
           seen.add(url);
-          links.push(url);
+          links.push({ url, title: url });
         }
       }
     }
@@ -498,12 +590,14 @@ export default defineBackground(() => {
   }
 
   function extractLinksFromHtml(baseUrl: URL, html: string) {
-    const hrefPattern = /href\s*=\s*["']([^"'#]+)["']/gi;
-    const links: string[] = [];
+    const hrefPattern = /<a\s+[^>]*?href=["']([^"'#]+)["'][^>]*?>(.*?)<\/a>/gi;
+    const links: { url: string; title: string }[] = [];
     const seen = new Set<string>();
 
     for (const match of html.matchAll(hrefPattern)) {
       const rawHref = String(match[1] || '').trim();
+      const rawTitle = String(match[2] || '').replace(/<[^>]*>/g, '').trim();
+      
       if (!rawHref || rawHref.startsWith('javascript:') || rawHref.startsWith('mailto:') || rawHref.startsWith('tel:')) {
         continue;
       }
@@ -513,7 +607,7 @@ export default defineBackground(() => {
         if (!resolved.startsWith('http://') && !resolved.startsWith('https://')) continue;
         if (seen.has(resolved)) continue;
         seen.add(resolved);
-        links.push(resolved);
+        links.push({ url: resolved, title: rawTitle || resolved });
         if (links.length >= 200) break;
       } catch {
         continue;

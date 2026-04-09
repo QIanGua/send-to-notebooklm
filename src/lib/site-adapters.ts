@@ -173,6 +173,7 @@ export const siteAdapters: SiteAdapter[] = [
       '*://*.bilibili.com/video/*',
       '*://*.bilibili.com/bangumi/play/*',
       '*://space.bilibili.com/*/lists/*',
+      '*://space.bilibili.com/*/upload/video*',
     ],
     supports(url) {
       return url.hostname.includes('bilibili.com');
@@ -208,6 +209,18 @@ export const siteAdapters: SiteAdapter[] = [
           displayName: 'B站 合集',
           pageType: 'playlist',
           itemId: listMatch[2],
+          sourceKind: 'video',
+          sourceUrl: url.toString(),
+        };
+      }
+
+      const uploadsMatch = url.pathname.match(/\/(\d+)\/upload\/video/);
+      if (uploadsMatch) {
+        return {
+          id: 'bilibili',
+          displayName: 'B站 投稿',
+          pageType: 'playlist',
+          itemId: uploadsMatch[1],
           sourceKind: 'video',
           sourceUrl: url.toString(),
         };

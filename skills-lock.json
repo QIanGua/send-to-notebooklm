@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "qiaomu-mondo-poster-design": {
+      "source": "joeseesun/qiaomu-mondo-poster-design",
+      "sourceType": "github",
+      "computedHash": "cb30a660bbf1f9cc54aa405e5c05d34bf004d6fdd5fed0a7c5ca2c3c6a9be404"
+    }
+  }
+}

@@ -13,7 +13,7 @@
   import VideoOverviewPage from './pages/VideoOverviewPage.svelte';
   import GeneralSettingsPage from './pages/GeneralSettingsPage.svelte';
   import SupportModal from '@/lib/components/SupportModal.svelte';
-  import type { ActiveTab, StatusTone, TabCandidate } from './types';
+  import type { ActiveTab, BulkImportSource, StatusTone, TabCandidate } from './types';
 
   $: toolLinks = [
     { id: 'bulk-import', label: $t('nav.bulkImport') },
@@ -67,15 +67,15 @@
   let tabsLoading = false;
   let tabsError = '';
   let pageLinkSourceUrl = '';
-  let pageLinks: string[] = [];
+  let pageLinks: BulkImportSource[] = [];
   let pageLinksLoading = false;
   let pageLinksError = '';
   let bilibiliPlaylistUrl = '';
-  let bilibiliLinks: string[] = [];
+  let bilibiliLinks: BulkImportSource[] = [];
   let bilibiliLoading = false;
   let bilibiliError = '';
   let youtubePlaylistUrl = '';
-  let youtubeLinks: string[] = [];
+  let youtubeLinks: BulkImportSource[] = [];
   let youtubeLoading = false;
   let youtubeError = '';
   let notebookStatus = '';
@@ -114,11 +114,11 @@
       : bulkImportMode === 'tabs'
         ? selectedBrowserTabs.map((tab) => tab.url)
         : bulkImportMode === 'page-links'
-          ? pageLinks
+          ? pageLinks.filter(item => item.selected).map(item => item.url)
           : bulkImportMode === 'bilibili-playlist'
-            ? bilibiliLinks
+            ? bilibiliLinks.filter(item => item.selected).map(item => item.url)
           : bulkImportMode === 'youtube-playlist'
-            ? youtubeLinks
+            ? youtubeLinks.filter(item => item.selected).map(item => item.url)
           : [];
 
   onMount(async () => {
@@ -221,9 +221,9 @@
   }
 
   async function handleBulkImport() {
-    if (selectedImportModeLocked) return;
+    if (bulkImporting) return;
     const isBilibili = bulkImportMode === 'bilibili-playlist';
-    if (importUrls.length === 0 || !['links', 'tabs', 'page-links', 'bilibili-playlist'].includes(bulkImportMode)) return;
+    if (importUrls.length === 0 || !['links', 'tabs', 'page-links', 'bilibili-playlist', 'youtube-playlist', 'rss-feed'].includes(bulkImportMode)) return;
 
     // If no notebook is selected, create a new one and import
     if (!selectedNotebookId) {
@@ -374,7 +374,11 @@
         throw new Error(response.error || 'Could not fetch page links.');
       }
 
-      pageLinks = response.links || [];
+      pageLinks = (response.links || []).map((item: any) => ({
+        url: typeof item === 'string' ? item : item.url,
+        title: typeof item === 'string' ? item : item.title,
+        selected: true
+      }));
       bulkImportStatus = pageLinks.length
         ? `Scanned page and found ${pageLinks.length} link${pageLinks.length > 1 ? 's' : ''}.`
         : 'Scanned page but found no importable links.';
@@ -406,7 +410,11 @@
         throw new Error(response.error || 'Could not fetch Bilibili playlist.');
       }
 
-      bilibiliLinks = response.links || [];
+      bilibiliLinks = (response.links || []).map((item: any) => ({
+        url: item.url,
+        title: item.title,
+        selected: true
+      }));
       bulkImportStatus = bilibiliLinks.length
         ? `Found ${bilibiliLinks.length} video${bilibiliLinks.length > 1 ? 's' : ''} in the playlist.`
         : 'Playlist is empty or could not be scanned.';
@@ -438,7 +446,11 @@
         throw new Error(response.error || 'Could not fetch YouTube playlist.');
       }
 
-      youtubeLinks = response.links || [];
+      youtubeLinks = (response.links || []).map((item: any) => ({
+        url: item.url,
+        title: item.title,
+        selected: true
+      }));
       bulkImportStatus = youtubeLinks.length
         ? `Found ${youtubeLinks.length} video${youtubeLinks.length > 1 ? 's' : ''} in the playlist.`
         : 'Playlist is empty or could not be scanned.';
@@ -450,6 +462,29 @@
       bulkImportStatusTone = 'error';
     } finally {
       youtubeLoading = false;
+    }
+  }
+
+  function toggleItemSelection(mode: string, index: number) {
+    if (mode === 'bilibili') {
+      bilibiliLinks[index].selected = !bilibiliLinks[index].selected;
+      bilibiliLinks = [...bilibiliLinks];
+    } else if (mode === 'youtube') {
+      youtubeLinks[index].selected = !youtubeLinks[index].selected;
+      youtubeLinks = [...youtubeLinks];
+    } else if (mode === 'page-links') {
+      pageLinks[index].selected = !pageLinks[index].selected;
+      pageLinks = [...pageLinks];
+    }
+  }
+
+  function setAllItemsSelection(mode: string, selected: boolean) {
+    if (mode === 'bilibili') {
+      bilibiliLinks = bilibiliLinks.map(item => ({ ...item, selected }));
+    } else if (mode === 'youtube') {
+      youtubeLinks = youtubeLinks.map(item => ({ ...item, selected }));
+    } else if (mode === 'page-links') {
+      pageLinks = pageLinks.map(item => ({ ...item, selected }));
     }
   }
 
@@ -646,6 +681,8 @@
           onFetchPageLinks={fetchPageLinksForSource}
           onFetchBilibiliPlaylistLinks={handleFetchBilibiliPlaylistLinks}
           onFetchYoutubePlaylistLinks={handleFetchYoutubePlaylistLinks}
+          onToggleItemSelection={toggleItemSelection}
+          onSetAllItemsSelection={setAllItemsSelection}
         />
       {:else if activeTab === 'notebooks'}
         <NotebooksPage

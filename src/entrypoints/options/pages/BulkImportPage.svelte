@@ -1,7 +1,7 @@
 <script lang="ts">
   import { t } from '@/lib/i18n';
   import type { NotebookSummary } from '@/lib/notebooks';
-  import type { StatusTone, TabCandidate } from '../types';
+  import type { BulkImportSource, StatusTone, TabCandidate } from '../types';
 
   export let notebooks: NotebookSummary[] = [];
   export let notebooksLoading = false;
@@ -29,7 +29,7 @@
   export let tabsLoading = false;
   export let tabsError = '';
   export let pageLinkSourceUrl = '';
-  export let pageLinks: string[] = [];
+  export let pageLinks: BulkImportSource[] = [];
   export let pageLinksLoading = false;
   export let pageLinksError = '';
 
@@ -44,14 +44,19 @@
   export let onFetchPageLinks: () => void | Promise<void>;
   export let onFetchBilibiliPlaylistLinks: () => void | Promise<void>;
   export let bilibiliPlaylistUrl = '';
-  export let bilibiliLinks: string[] = [];
+  export let bilibiliLinks: BulkImportSource[] = [];
   export let bilibiliLoading = false;
   export let bilibiliError = '';
   export let youtubePlaylistUrl = '';
-  export let youtubeLinks: string[] = [];
+  export let youtubeLinks: BulkImportSource[] = [];
   export let youtubeLoading = false;
   export let youtubeError = '';
   export let onFetchYoutubePlaylistLinks: () => void | Promise<void>;
+  export let onToggleItemSelection: (mode: string, index: number) => void;
+  export let onSetAllItemsSelection: (mode: string, selected: boolean) => void;
+
+  let showAllBilibili = false;
+  let showAllYoutube = false;
 </script>
 
 <header class="mb-8 border-b border-[#ebe5df] pb-5">
@@ -291,12 +296,25 @@
           {/if}
 
           {#if pageLinks.length > 0}
-            <div class="mt-4 space-y-2 rounded-2xl border border-[#e5ddd5] bg-white p-3">
-              {#each pageLinks as link}
-                <div class="truncate rounded-2xl border border-[#efe7de] bg-[#fcfaf7] px-4 py-3 text-sm text-[#2a241f]">
-                  {link}
+            <div class="mt-4 overflow-hidden rounded-2xl border border-[#e5ddd5] bg-white">
+              <div class="flex items-center justify-between border-b border-[#f2ece6] bg-[#fcfaf7] px-4 py-2">
+                <span class="text-[11px] font-semibold uppercase tracking-wider text-[#8e8882]">Found {pageLinks.length} Links</span>
+                <div class="flex gap-4">
+                  <button on:click={() => onSetAllItemsSelection('page-links', true)} class="text-[11px] font-bold text-[#8b6b4c] hover:underline">Select All</button>
+                  <button on:click={() => onSetAllItemsSelection('page-links', false)} class="text-[11px] font-bold text-[#8b6b4c] hover:underline">Deselect All</button>
                 </div>
-              {/each}
+              </div>
+              <div class="max-h-[320px] overflow-y-auto p-2 space-y-1">
+                {#each pageLinks as item, i}
+                  <label class="flex cursor-pointer items-start gap-3 rounded-xl border border-transparent p-2 transition hover:bg-[#f7f3ee] hover:border-[#efe7de] {item.selected ? 'bg-[#fcfaf7] border-[#efe7de]' : ''}">
+                    <input type="checkbox" checked={item.selected} on:change={() => onToggleItemSelection('page-links', i)} class="mt-1 h-3.5 w-3.5 rounded border-[#c9bfb4] text-[#2f2924] focus:ring-[#c2b4a5]" />
+                    <div class="min-w-0 flex-1">
+                      <div class="truncate text-xs font-medium text-[#17120d]">{item.title}</div>
+                      <div class="mt-0.5 truncate text-[10px] text-[#a19890]">{item.url}</div>
+                    </div>
+                  </label>
+                {/each}
+              </div>
             </div>
           {/if}
 
@@ -345,15 +363,32 @@
           {/if}
 
           {#if bilibiliLinks.length > 0}
-            <div class="mt-4 space-y-2 rounded-2xl border border-[#e5ddd5] bg-white p-3">
-              <p class="px-1 text-xs font-medium text-[#8e8882]">{$t('bulk.videosFound', { count: bilibiliLinks.length })}:</p>
-              {#each bilibiliLinks.slice(0, 5) as link}
-                <div class="truncate rounded-2xl border border-[#efe7de] bg-[#fcfaf7] px-4 py-2 text-xs text-[#2a241f]">
-                  {link}
+            <div class="mt-4 overflow-hidden rounded-2xl border border-[#e5ddd5] bg-white">
+              <div class="flex items-center justify-between border-b border-[#f2ece6] bg-[#fcfaf7] px-4 py-2">
+                <span class="text-[11px] font-semibold uppercase tracking-wider text-[#8e8882]">{$t('bulk.videosFound', { count: bilibiliLinks.length })}</span>
+                <div class="flex gap-4">
+                  <button on:click={() => onSetAllItemsSelection('bilibili', true)} class="text-[11px] font-bold text-[#8b6b4c] hover:underline">Select All</button>
+                  <button on:click={() => onSetAllItemsSelection('bilibili', false)} class="text-[11px] font-bold text-[#8b6b4c] hover:underline">Deselect All</button>
                 </div>
-              {/each}
+              </div>
+              <div class="max-h-[400px] overflow-y-auto p-2 space-y-1">
+                {#each (showAllBilibili ? bilibiliLinks : bilibiliLinks.slice(0, 5)) as item, i}
+                  <label class="flex cursor-pointer items-start gap-3 rounded-xl border border-transparent p-2 transition hover:bg-[#f7f3ee] hover:border-[#efe7de] {item.selected ? 'bg-[#fcfaf7] border-[#efe7de]' : ''}">
+                    <input type="checkbox" checked={item.selected} on:change={() => onToggleItemSelection('bilibili', i)} class="mt-1.5 h-4 w-4 rounded border-[#c9bfb4] text-[#2f2924] focus:ring-[#c2b4a5]" />
+                    <div class="min-w-0 flex-1">
+                      <div class="line-clamp-2 text-sm font-semibold text-[#17120d] leading-snug">{item.title}</div>
+                      <div class="mt-1 truncate text-xs text-[#a19890]">{item.url}</div>
+                    </div>
+                  </label>
+                {/each}
+              </div>
               {#if bilibiliLinks.length > 5}
-                <p class="px-1 text-center text-xs text-[#6d655e]">... and {bilibiliLinks.length - 5} more</p>
+                <button 
+                  on:click={() => showAllBilibili = !showAllBilibili}
+                  class="w-full border-t border-[#f2ece6] bg-[#fdfbf9] py-2 text-center text-xs font-bold text-[#8b6b4c] transition hover:bg-[#f7f3ee]"
+                >
+                  {showAllBilibili ? 'Show less' : `... and ${bilibiliLinks.length - 5} more`}
+                </button>
               {/if}
             </div>
           {/if}
@@ -403,15 +438,32 @@
           {/if}
 
           {#if youtubeLinks.length > 0}
-            <div class="mt-4 space-y-2 rounded-2xl border border-[#e5ddd5] bg-white p-3">
-              <p class="px-1 text-xs font-medium text-[#8e8882]">{$t('bulk.videosFound', { count: youtubeLinks.length })}:</p>
-              {#each youtubeLinks.slice(0, 5) as link}
-                <div class="truncate rounded-2xl border border-[#efe7de] bg-[#fcfaf7] px-4 py-2 text-xs text-[#2a241f]">
-                  {link}
+            <div class="mt-4 overflow-hidden rounded-2xl border border-[#e5ddd5] bg-white">
+              <div class="flex items-center justify-between border-b border-[#f2ece6] bg-[#fcfaf7] px-4 py-2">
+                <span class="text-[11px] font-semibold uppercase tracking-wider text-[#8e8882]">Videos Found: {youtubeLinks.length}</span>
+                <div class="flex gap-4">
+                  <button on:click={() => onSetAllItemsSelection('youtube', true)} class="text-[11px] font-bold text-[#8b6b4c] hover:underline">Select All</button>
+                  <button on:click={() => onSetAllItemsSelection('youtube', false)} class="text-[11px] font-bold text-[#8b6b4c] hover:underline">Deselect All</button>
                 </div>
-              {/each}
+              </div>
+              <div class="max-h-[400px] overflow-y-auto p-2 space-y-1">
+                {#each (showAllYoutube ? youtubeLinks : youtubeLinks.slice(0, 5)) as item, i}
+                  <label class="flex cursor-pointer items-start gap-3 rounded-xl border border-transparent p-2 transition hover:bg-[#f7f3ee] hover:border-[#efe7de] {item.selected ? 'bg-[#fcfaf7] border-[#efe7de]' : ''}">
+                    <input type="checkbox" checked={item.selected} on:change={() => onToggleItemSelection('youtube', i)} class="mt-1.5 h-4 w-4 rounded border-[#c9bfb4] text-[#2f2924] focus:ring-[#c2b4a5]" />
+                    <div class="min-w-0 flex-1">
+                      <div class="line-clamp-2 text-sm font-semibold text-[#17120d] leading-snug">{item.title}</div>
+                      <div class="mt-1 truncate text-xs text-[#a19890]">{item.url}</div>
+                    </div>
+                  </label>
+                {/each}
+              </div>
               {#if youtubeLinks.length > 5}
-                <p class="px-1 text-center text-xs text-[#6d655e]">... and {youtubeLinks.length - 5} more</p>
+                <button 
+                  on:click={() => showAllYoutube = !showAllYoutube}
+                  class="w-full border-t border-[#f2ece6] bg-[#fdfbf9] py-2 text-center text-xs font-bold text-[#8b6b4c] transition hover:bg-[#f7f3ee]"
+                >
+                  {showAllYoutube ? 'Show less' : `... and ${youtubeLinks.length - 5} more`}
+                </button>
               {/if}
             </div>
           {/if}
