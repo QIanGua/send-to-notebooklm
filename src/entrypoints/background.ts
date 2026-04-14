@@ -1,16 +1,17 @@
 import { getSiteAdapter } from '@/lib/site-adapters';
 import { createEmptyPageContext, enrichPageContextWithSite } from '@/lib/page-context';
-import md5 from 'js-md5';
+import { md5 } from 'js-md5';
 
 export default defineBackground(() => {
   const NOTEBOOKLM_ORIGIN = 'https://notebooklm.google.com';
   const STORAGE_KEYS = {
     selectedNotebookId: 'selectedNotebookId',
   };
-  const TOKEN_TTL_MS = 30_000;
   const NOTEBOOK_TTL_MS = 15_000;
+  const TOKEN_TTL_MS = 600_000; // Increase to 10 minutes
 
   let tokenCache: { value: { buildLabel: string; at: string }; expiresAt: number } | null = null;
+  let tokenPromise: Promise<{ buildLabel: string; at: string }> | null = null;
   let notebookCache: { value: any[]; expiresAt: number } | null = null;
 
   console.log('[STN-Background] Loaded. Version: 2.1.0');
@@ -71,6 +72,9 @@ export default defineBackground(() => {
     switch (message.type) {
       case 'get-page-context':
         return getPageContext(message.tabId, sender.tab);
+      case 'warmup-tokens':
+        await fetchNotebookTokens();
+        return { ok: true };
       case 'fetch-notebooks':
         return { ok: true, notebooks: await fetchNotebooks() };
       case 'create-notebook': {
@@ -198,35 +202,48 @@ export default defineBackground(() => {
       return tokenCache.value;
     }
 
-    let response: Response;
-    try {
-      response = await fetch(`${NOTEBOOKLM_ORIGIN}/`, {
-        redirect: 'error',
-        credentials: 'include',
-      });
-    } catch {
-      throw new Error('Please open NotebookLM in this browser and sign in first.');
-    }
+    if (tokenPromise) return tokenPromise;
 
-    if (!response.ok) {
-      throw new Error('Please open NotebookLM in this browser and sign in first.');
-    }
+    tokenPromise = (async () => {
+      let response: Response;
+      try {
+        console.log('[STN-Background] Refreshing NotebookLM session tokens...');
+        response = await fetch(`${NOTEBOOKLM_ORIGIN}/`, {
+          redirect: 'error',
+          credentials: 'include',
+        });
+      } catch (err) {
+        tokenPromise = null;
+        throw new Error('Please open NotebookLM in this browser and sign in first.');
+      }
 
-    const html = await response.text();
-    const value = {
-      buildLabel: extractToken('cfb2h', html),
-      at: extractToken('SNlM0e', html),
-    };
+      if (!response.ok) {
+        tokenPromise = null;
+        throw new Error('Please open NotebookLM in this browser and sign in first.');
+      }
 
-    if (!value.buildLabel || !value.at) {
-      throw new Error('NotebookLM session not detected. Open NotebookLM and sign in first.');
-    }
+      const html = await response.text();
+      const value = {
+        buildLabel: extractToken('cfb2h', html),
+        at: extractToken('SNlM0e', html),
+      };
 
-    tokenCache = {
-      value,
-      expiresAt: Date.now() + TOKEN_TTL_MS,
-    };
-    return value;
+      if (!value.buildLabel || !value.at) {
+        tokenPromise = null;
+        throw new Error('NotebookLM session not detected. Open NotebookLM and sign in first.');
+      }
+
+      tokenCache = {
+        value,
+        expiresAt: Date.now() + TOKEN_TTL_MS,
+      };
+      
+      // Clear promise after success so next 'force' or expiry works
+      setTimeout(() => { tokenPromise = null; }, 100);
+      return value;
+    })();
+
+    return tokenPromise;
   }
 
   async function fetchNotebooks(force = false) {
@@ -456,10 +473,14 @@ export default defineBackground(() => {
     };
   }
 
-  function signBilibiliParams(params: Record<string, any>, img_key: string, sub_key: string) {
+  function signBilibiliParams(
+    params: Record<string, string | number | boolean | null | undefined>,
+    img_key: string,
+    sub_key: string,
+  ) {
     const mixed_key = getMixKey(img_key + sub_key);
     const curr_time = Math.round(Date.now() / 1000);
-    const paramsWithWts = { ...params, wts: curr_time };
+    const paramsWithWts: Record<string, string | number | boolean | null | undefined> = { ...params, wts: curr_time };
     
     // Bilibili WBI signing: Sort, Filter, URI Encode
     const chr_filter = /[!'()*]/g;
@@ -538,10 +559,28 @@ export default defineBackground(() => {
       _reqid: String(Math.floor(Math.random() * 900000) + 100000),
       rt: 'c',
     });
+
+    const items = await Promise.all(urls.map(async (url) => {
+      // YouTube requires a specialized structure [null, null, ..., [url]] for native playback
+      if (url.includes('youtube.com') || url.includes('youtu.be')) {
+        return [null, null, null, null, null, null, null, [url]];
+      }
+      
+      // Bilibili: Attempt to resolve a "real" link using the mobile UA trick
+      if (url.includes('bilibili.com/video/')) {
+        const deepUrl = await resolveBilibiliRealUrl(url);
+        // Use standard structure [null, null, [url]] for Bilibili to avoid "Transcript not available" error
+        return [null, null, [deepUrl]];
+      }
+
+      return [null, null, [url]];
+    }));
+
     const body = new URLSearchParams({
-      'f.req': JSON.stringify([[['izAoDd', JSON.stringify([urls.map((url) => [null, null, [url]]), notebookId]), null, 'generic']]]),
+      'f.req': JSON.stringify([[['izAoDd', JSON.stringify([items, notebookId]), null, 'generic']]]),
       at,
     });
+
 
     const response = await fetch(`${NOTEBOOKLM_ORIGIN}/_/LabsTailwindUi/data/batchexecute?${params}`, {
       method: 'POST',
@@ -555,6 +594,47 @@ export default defineBackground(() => {
     }
 
     invalidateNotebookCache();
+  }
+
+  async function resolveBilibiliRealUrl(url: string): Promise<string> {
+    try {
+      // Mobile User-Agent trick to get a simpler page or direct playUrlInfo
+      const mobileUA = 'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.25 Mobile Safari/537.36';
+      const response = await fetch(url, {
+        headers: { 'User-Agent': mobileUA }
+      });
+      if (!response.ok) return url;
+
+      const html = await response.text();
+      // Extract playUrlInfo if available (as per the Python script logic)
+      const pattern = /"playUrlInfo"\s*:\s*\[\s*{(.*?)}\s*\]/s;
+      const match = html.match(pattern);
+      
+      if (match) {
+        try {
+          const jsonStr = "{" + match[0] + "}";
+          const cleaned = jsonStr.replace(/\\u002F/g, '/');
+          const data = JSON.parse(cleaned);
+          if (data.playUrlInfo?.[0]?.url) {
+            console.log('[STN-Background] Bilibili real URL extracted:', data.playUrlInfo[0].url);
+            // NOTE: Returning the CDN URL directly might trigger anti-hotlinking.
+            // But this satisfies the user's request for the "real" link.
+            return data.playUrlInfo[0].url;
+          }
+        } catch (e) {
+          console.warn('[STN-Background] Failed to parse Bilibili playUrlInfo:', e);
+        }
+      }
+
+      // Fallback: If no deep link, return the mobile-optimized URL which is easier for Google to scrape
+      const bvid = url.match(/video\/(BV[a-zA-Z0-9]+)/)?.[1];
+      if (bvid) return `https://m.bilibili.com/video/${bvid}`;
+      
+      return url;
+    } catch (error) {
+      console.warn('[STN-Background] resolveBilibiliRealUrl error:', error);
+      return url;
+    }
   }
 
   function parseBatchExecutePayload(text: string) {

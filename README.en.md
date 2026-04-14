@@ -4,12 +4,12 @@
 
 [简体中文](README.md) | [English](README.en.md)
 
-Send to NotebookLM is a powerful browser extension designed to automate your research workflow. Capture web pages, arXiv papers, and YouTube videos directly into Google NotebookLM, and use the built-in "Enhancer" to automate artifact generation.
+Send to NotebookLM is a powerful browser extension designed to automate your research workflow. Capture web pages, arXiv papers, and YouTube sources directly into Google NotebookLM, and use the built-in "Enhancer" to automate artifact generation.
 
 ## ✨ Key Features
 
 ### 🚀 One-Click Capture
-- **YouTube**: Extract video transcripts and send them to NotebookLM via an inline button.
+- **YouTube**: Send the YouTube URL so NotebookLM can process the source through captions/transcript text.
 - **arXiv**: Import paper abstracts and PDFs directly as sources.
 - **Universal Web Pages**: Send any URL from the extension popup or context menu.
 
@@ -83,6 +83,8 @@ bun run build
   - **A**: Please ensure you are logged into the [NotebookLM official site](https://notebooklm.google.com/) in your browser.
 - **Q: Will my data be uploaded?**
   - **A**: This extension does not have a backend server. All configurations and list data are stored only in your local browser.
+- **Q: Can this import the raw video file from Bilibili or other video sites into NotebookLM?**
+  - **A**: No through the current URL import flow. For non-YouTube video pages, NotebookLM only receives the page URL; for YouTube, NotebookLM processes captions/transcript text rather than the raw video file.
 
 ## ❤️ Support the Developer
 
@@ -95,4 +97,3 @@ If you find this tool helpful, feel free to buy me a coffee! Your support keeps 
 
 ---
 *Send to NotebookLM v3.0.0 - The most powerful way to feed your brain.*
-

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { language, t, type Language } from '@/lib/i18n';
-  import { getPreferredSourceUrl, isQuickImportPage } from '@/lib/page-context';
+  import { getImportBehavior, getPreferredSourceUrl, isQuickImportPage } from '@/lib/page-context';
   import { browser } from 'wxt/browser';
   import SupportModal from '@/lib/components/SupportModal.svelte';
 
@@ -20,20 +20,27 @@
   $: localizedStatus = status.text;
   $: isQuickMode = isQuickImportPage(page);
   $: isArxivQuickMode = page?.site?.id === 'arxiv' && isQuickMode;
-  $: isYoutubeQuickMode = page?.site?.id === 'youtube' && isQuickMode;
-  $: isCustomQuickMode = isQuickMode && !isArxivQuickMode && !isYoutubeQuickMode;
+  $: isVideoQuickMode = (page?.site?.id === 'youtube' || page?.site?.id === 'bilibili') && isQuickMode;
+  $: isCustomQuickMode = isQuickMode && !isArxivQuickMode && !isVideoQuickMode;
+  $: importBehavior = getImportBehavior(page);
+  $: importNote = importBehavior === 'video_source'
+    ? $t('import_note_video')
+    : (page?.site?.pageType === 'video' || page?.site?.pageType === 'playlist')
+      ? $t('import_note_video_page')
+      : '';
   $: modeLabel = isArxivQuickMode
     ? $t('mode_arxiv_import')
-    : isYoutubeQuickMode
-      ? $t('mode_youtube_import')
+    : isVideoQuickMode
+      ? $t('mode_video_import')
       : isCustomQuickMode
         ? $t('mode_site_import', { site: page?.site?.displayName || $t('type_notebook') })
         : "";
+
   $: actionLabel = isQuickMode ? $t('label_create_new') : $t('label_send_ready');
   $: actionHint = isArxivQuickMode
     ? $t('hint_create_arxiv')
-    : isYoutubeQuickMode
-      ? $t('hint_create_youtube')
+    : isVideoQuickMode
+      ? $t('hint_create_video')
       : isCustomQuickMode
         ? $t('hint_create_site', { site: page?.site?.displayName || $t('type_notebook') })
         : $t('hint_send_url');
@@ -124,8 +131,8 @@
     setStatus(
       isArxivQuickMode
         ? $t("status_importing_arxiv")
-        : isYoutubeQuickMode
-          ? $t("status_importing_youtube")
+        : isVideoQuickMode
+          ? $t("status_importing_video")
           : isQuickMode
             ? $t("status_importing_source")
             : $t("status_sending"),
@@ -138,7 +145,14 @@
 
       if (!response.ok) throw new Error(response.error || $t("status_send_failed"));
 
-      setStatus($t("status_import_success"), "success");
+      setStatus(
+        isArxivQuickMode
+          ? $t("status_import_success_arxiv")
+          : isVideoQuickMode
+            ? $t("status_import_success_video")
+            : $t("status_import_success"),
+        "success"
+      );
       await browser.tabs.create({ url: response.notebookUrl });
       window.close();
     } catch (error: any) {
@@ -163,7 +177,7 @@
       page?.site?.sourceKind === 'pdf'
         ? $t('status_adding_arxiv')
         : page?.site?.sourceKind === 'video'
-          ? $t('status_adding_youtube')
+          ? $t('status_adding_video')
           : $t('status_adding_source'),
     );
 
@@ -179,7 +193,7 @@
         page?.site?.sourceKind === 'pdf'
           ? $t('status_add_success_arxiv')
           : page?.site?.sourceKind === 'video'
-            ? $t('status_add_success_youtube')
+            ? $t('status_add_success_video')
             : $t('status_add_success_source'),
         "success",
       );
@@ -288,8 +302,15 @@
     <p class="text-[11px] text-stone-600 line-clamp-2 leading-relaxed h-[32px]">
       {isArxivQuickMode
         ? $t('desc_arxiv', { url: shortenUrl(page.arxiv.pdfUrl) })
-        : isYoutubeQuickMode
+        : page?.site?.id === 'youtube' && isQuickMode
           ? $t('desc_youtube', { url: shortenUrl(page.youtube.videoUrl) })
+          : page?.site?.id === 'bilibili' && isQuickMode
+            ? $t('desc_bilibili', { url: shortenUrl(page.site.sourceUrl || '') })
+            : page?.site?.pageType === 'video' || page?.site?.pageType === 'playlist'
+              ? $t('desc_video_page', {
+                  site: page?.site?.displayName || $t('type_notebook'),
+                  url: shortenUrl(page?.site?.sourceUrl || ''),
+                })
           : isCustomQuickMode
             ? $t('desc_site_source', {
                 site: page?.site?.displayName || $t('type_notebook'),
@@ -297,6 +318,12 @@
               })
             : page?.description || $t('desc_default')}
     </p>
+
+    {#if importNote}
+      <div class="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-900">
+        {importNote}
+      </div>
+    {/if}
 
     {#if page?.selectedText}
       <div class="mt-3 p-3 bg-orange-50/50 border-l-2 border-orange-200 rounded-r-lg italic text-[11px] text-orange-950/70">

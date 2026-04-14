@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { language, t, type Language } from '@/lib/i18n';
-  import { getPreferredSourceUrl, isQuickImportPage } from '@/lib/page-context';
+  import { getImportBehavior, getPreferredSourceUrl, isQuickImportPage } from '@/lib/page-context';
   import { browser } from 'wxt/browser';
 
   export let page: any;
@@ -16,7 +16,13 @@
   let storageListener: ((changes: Record<string, { newValue?: unknown }>, areaName: string) => void) | null = null;
 
   $: sourceUrl = getPreferredSourceUrl(page);
+  $: importBehavior = getImportBehavior(page);
   $: isPlaylist = page?.site?.pageType === 'playlist';
+  $: importNote = importBehavior === 'video_source'
+    ? $t('import_note_video')
+    : (page?.site?.pageType === 'video' || page?.site?.pageType === 'playlist')
+      ? $t('import_note_video_page')
+      : '';
   $: currentSourceLabel = page?.site?.sourceKind === 'pdf'
     ? $t('type_pdf')
     : page?.site?.sourceKind === 'video'
@@ -30,6 +36,11 @@
       const saved = await browser.storage.local.get(["language", "selectedNotebookId"]);
       if (saved.language) language.set(saved.language as Language);
       selectedNotebookId = (saved.selectedNotebookId as string) || "";
+      
+      // Warmup tokens if on a supported page to reduce initial latency
+      if (isQuickImportPage(page)) {
+        browser.runtime.sendMessage({ type: "warmup-tokens" }).catch(() => {});
+      }
     })();
 
     storageListener = (changes: Record<string, { newValue?: unknown }>, areaName: string) => {
@@ -107,11 +118,27 @@
       const urls = await getUrlsToImport();
       if (urls.length === 0) throw new Error("No videos found in this playlist.");
       
+      // Phase 1: Create Notebook
+      setStatus($t("status_creating_notebook"));
+      const createResponse: any = await browser.runtime.sendMessage({ type: "create-notebook" });
+      if (!createResponse.ok) throw new Error(createResponse.error || "Failed to create notebook");
+      const notebookId = createResponse.notebookId;
+
+      // Phase 2: Send to Notebook
+      setStatus(
+        page?.site?.sourceKind === 'pdf'
+          ? $t('status_importing_arxiv')
+          : page?.site?.sourceKind === 'video'
+            ? isPlaylist ? $t('status_fetching_playlist') : $t('status_importing_youtube')
+            : $t('status_importing_source'),
+      );
+
       const response: any = await browser.runtime.sendMessage({
-        type: "create-notebook-and-send",
+        type: "send-to-notebook",
+        notebookId: notebookId,
         urls: urls
       });
-      if (!response.ok) throw new Error(response.error || $t("status_create_failed"));
+      if (!response.ok) throw new Error(response.error || $t("status_send_failed"));
       setStatus($t("status_imported_opening"), "success");
       window.open(response.notebookUrl, "_blank", "noopener,noreferrer");
     } catch (error: any) {
@@ -183,6 +210,12 @@
       <p style="font-size: 11px; color: #78716c; margin: 0 0 12px; line-height: 1.4;">
         {$t("inline_hint", { type: currentSourceLabel })}
       </p>
+
+      {#if importNote}
+        <div style="margin-bottom: 12px; border: 1px solid #fcd34d; border-radius: 12px; background: #fffbeb; padding: 8px 10px; font-size: 11px; line-height: 1.4; color: #92400e;">
+          {importNote}
+        </div>
+      {/if}
 
       <div style="display: grid; grid-template-columns: {showOpenNotebookButton ? '1fr 1fr' : '1fr'}; gap: 8px; margin-bottom: 10px;">
         <button 

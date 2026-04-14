@@ -42,6 +42,7 @@ export const siteAdapters: SiteAdapter[] = [
           pageType: 'abs',
           itemId: paperId,
           sourceKind: 'pdf',
+          importBehavior: 'pdf_url',
           sourceUrl: `https://arxiv.org/pdf/${paperId}.pdf`,
         };
       }
@@ -55,6 +56,7 @@ export const siteAdapters: SiteAdapter[] = [
           pageType: 'pdf',
           itemId: paperId,
           sourceKind: 'pdf',
+          importBehavior: 'pdf_url',
           sourceUrl: `https://arxiv.org/pdf/${paperId}.pdf`,
         };
       }
@@ -64,6 +66,7 @@ export const siteAdapters: SiteAdapter[] = [
         displayName: 'arXiv',
         pageType: 'other',
         sourceKind: 'url',
+        importBehavior: 'web_url',
         sourceUrl: '',
       };
     },
@@ -94,6 +97,7 @@ export const siteAdapters: SiteAdapter[] = [
               pageType: 'video',
               itemId: videoId,
               sourceKind: 'video',
+              importBehavior: 'video_source',
               sourceUrl: `https://www.youtube.com/watch?v=${videoId}`,
             }
           : null;
@@ -108,6 +112,7 @@ export const siteAdapters: SiteAdapter[] = [
               pageType: 'video',
               itemId: videoId,
               sourceKind: 'video',
+              importBehavior: 'video_source',
               sourceUrl: `https://www.youtube.com/watch?v=${videoId}`,
             }
           : null;
@@ -118,6 +123,7 @@ export const siteAdapters: SiteAdapter[] = [
         displayName: 'YouTube',
         pageType: 'other',
         sourceKind: 'url',
+        importBehavior: 'web_url',
         sourceUrl: '',
       };
     },
@@ -151,6 +157,7 @@ export const siteAdapters: SiteAdapter[] = [
         pageType: 'pdf',
         itemId: fileName,
         sourceKind: 'pdf',
+        importBehavior: 'pdf_url',
         sourceUrl: url.toString(),
       };
     },
@@ -187,6 +194,7 @@ export const siteAdapters: SiteAdapter[] = [
           pageType: 'video',
           itemId: videoMatch[1],
           sourceKind: 'video',
+          importBehavior: 'video_source',
           sourceUrl: `https://www.bilibili.com/video/${videoMatch[1]}`,
         };
       }
@@ -198,6 +206,7 @@ export const siteAdapters: SiteAdapter[] = [
           pageType: 'video',
           itemId: url.pathname.split('/').pop() || 'bangumi',
           sourceKind: 'video',
+          importBehavior: 'video_source',
           sourceUrl: url.toString(),
         };
       }
@@ -210,6 +219,7 @@ export const siteAdapters: SiteAdapter[] = [
           pageType: 'playlist',
           itemId: listMatch[2],
           sourceKind: 'video',
+          importBehavior: 'video_source',
           sourceUrl: url.toString(),
         };
       }
@@ -222,6 +232,7 @@ export const siteAdapters: SiteAdapter[] = [
           pageType: 'playlist',
           itemId: uploadsMatch[1],
           sourceKind: 'video',
+          importBehavior: 'video_source',
           sourceUrl: url.toString(),
         };
       }
@@ -231,6 +242,7 @@ export const siteAdapters: SiteAdapter[] = [
         displayName: 'B站',
         pageType: 'other',
         sourceKind: 'url',
+        importBehavior: 'web_url',
         sourceUrl: '',
       };
     },

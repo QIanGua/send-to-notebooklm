@@ -1,4 +1,5 @@
 export type SourceKind = 'url' | 'pdf' | 'video';
+export type ImportBehavior = 'web_url' | 'pdf_url' | 'video_source';
 
 export interface SiteContext {
   id: string;
@@ -6,6 +7,7 @@ export interface SiteContext {
   pageType: string;
   sourceUrl: string;
   sourceKind: SourceKind;
+  importBehavior: ImportBehavior;
   itemId?: string;
 }
 
@@ -124,4 +126,8 @@ export function getPreferredSourceUrl(page: Partial<PageContext> | null | undefi
 
 export function isQuickImportPage(page: Partial<PageContext> | null | undefined) {
   return Boolean(page?.site?.sourceUrl);
+}
+
+export function getImportBehavior(page: Partial<PageContext> | null | undefined): ImportBehavior {
+  return page?.site?.importBehavior || 'web_url';
 }

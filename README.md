@@ -4,12 +4,12 @@
 
 [简体中文](README.md) | [English](README.en.md)
 
-Send to NotebookLM 是一个功能强大的浏览器扩展，旨在自动化您的研究流程。将网页、arXiv 论文和 YouTube 视频直接捕获到 Google NotebookLM 中，并利用内置的 “Enhancer” 增强功能自动生成各种研究产物。
+Send to NotebookLM 是一个功能强大的浏览器扩展，旨在自动化您的研究流程。将网页、arXiv 论文和 YouTube 来源直接捕获到 Google NotebookLM 中，并利用内置的 “Enhancer” 增强功能自动生成各种研究产物。
 
 ## ✨ 核心特性
 
 ### 🚀 一键捕获
-- **YouTube**: 自动提取视频字幕并发送到您的笔记本。
+- **YouTube**: 发送 YouTube 链接，让 NotebookLM 基于字幕/转写文本处理该来源。
 - **arXiv**: 直接将论文摘要和 PDF 作为源导入。
 - **通用网页**: 通过扩展弹出窗或右键菜单发送任何网页。
 
@@ -83,6 +83,8 @@ bun run build
   - **A**: 请确保您已在浏览器中登录 [NotebookLM 官网](https://notebooklm.google.com/)。
 - **Q: 我的数据会被上传吗？**
   - **A**: 本插件不设后端服务器，所有配置和列表数据仅存储在您的本地浏览器中。
+- **Q: 能把 B站/其他站点的“原视频文件”直接导入 NotebookLM 吗？**
+  - **A**: 不能通过当前这条 URL 导入链路做到。对非 YouTube 视频页，NotebookLM 只会读取页面 URL；对 YouTube，NotebookLM 处理的是字幕/转写文本，不是原视频文件。
 
 ## ❤️ 支持开发
 
